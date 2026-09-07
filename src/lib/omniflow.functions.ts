@@ -49,6 +49,101 @@ export type Expectation = {
   gap_note: string | null;
 };
 
+export type Dependency = {
+  id: string;
+  name: string;
+  kind: string;
+  version: string | null;
+  criticality: number;
+  usage_note: string | null;
+  debt_hours: number;
+  risk_score: number;
+  risk_note: string | null;
+};
+
+export type Lead = {
+  id: string;
+  company: string;
+  contact_name: string | null;
+  email: string | null;
+  channel: string;
+  stage: string;
+  value: number;
+  sentiment: string;
+  notes: string | null;
+  last_touch_at: string | null;
+};
+
+export type LeadTouch = {
+  id: string;
+  lead_id: string;
+  channel: string;
+  note: string | null;
+  sentiment: string;
+  created_at: string;
+};
+
+export type Call = {
+  id: string;
+  client_id: string | null;
+  participant: string;
+  direction: string;
+  duration_seconds: number;
+  transcript: string;
+  summary: string | null;
+  sentiment: string | null;
+  objections: string | null;
+  talk_ratio: number | null;
+  action_items: string[];
+  created_at: string;
+};
+
+export type Ticket = {
+  id: string;
+  client_id: string | null;
+  requester: string;
+  channel: string;
+  priority: string;
+  subject: string;
+  body: string;
+  status: string;
+  ai_reply: string | null;
+  resolution: string | null;
+  created_at: string;
+};
+
+export type Deal = {
+  id: string;
+  client_id: string | null;
+  name: string;
+  owner_name: string | null;
+  stage: string;
+  value: number;
+  probability: number;
+  close_date: string | null;
+  health_score: number | null;
+  health_note: string | null;
+};
+
+export type Invoice = {
+  id: string;
+  client_id: string | null;
+  number: string;
+  amount: number;
+  issued_at: string;
+  due_at: string | null;
+  status: string;
+};
+
+export type Expense = {
+  id: string;
+  client_id: string | null;
+  category: string;
+  description: string;
+  amount: number;
+  incurred_at: string;
+};
+
 export type Workspace = {
   orgId: string;
   orgName: string;
@@ -58,6 +153,14 @@ export type Workspace = {
   commitments: Commitment[];
   sources: Source[];
   expectations: Expectation[];
+  dependencies: Dependency[];
+  leads: Lead[];
+  leadTouches: LeadTouch[];
+  calls: Call[];
+  tickets: Ticket[];
+  deals: Deal[];
+  invoices: Invoice[];
+  expenses: Expense[];
 };
 
 async function currentOrg(supabase: SupabaseLike): Promise<string> {
@@ -77,7 +180,23 @@ export const getWorkspace = createServerFn({ method: "GET" })
     const supabase = context.supabase as unknown as SupabaseLike;
     const orgId = await currentOrg(supabase);
 
-    const [org, profile, people, clients, commitments, sources, expectations] = await Promise.all([
+    const [
+      org,
+      profile,
+      people,
+      clients,
+      commitments,
+      sources,
+      expectations,
+      dependencies,
+      leads,
+      leadTouches,
+      calls,
+      tickets,
+      deals,
+      invoices,
+      expenses,
+    ] = await Promise.all([
       supabase.from("organizations").select("name").eq("id", orgId).maybeSingle(),
       supabase.from("profiles").select("display_name").eq("id", context.userId).maybeSingle(),
       supabase.from("people").select("id,name,role_title,email").eq("org_id", orgId).order("name"),
@@ -85,7 +204,17 @@ export const getWorkspace = createServerFn({ method: "GET" })
       supabase.from("commitments").select("*").eq("org_id", orgId).order("due_at", { ascending: true, nullsFirst: false }),
       supabase.from("sources").select("id,title,channel,content,summary,created_at").eq("org_id", orgId).order("created_at", { ascending: false }),
       supabase.from("expectations").select("*").eq("org_id", orgId).order("gap_score", { ascending: false }),
+      supabase.from("dependencies").select("*").eq("org_id", orgId).order("risk_score", { ascending: false }),
+      supabase.from("leads").select("*").eq("org_id", orgId).order("value", { ascending: false }),
+      supabase.from("lead_touches").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
+      supabase.from("calls").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
+      supabase.from("tickets").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
+      supabase.from("deals").select("*").eq("org_id", orgId).order("value", { ascending: false }),
+      supabase.from("invoices").select("*").eq("org_id", orgId).order("due_at", { ascending: true, nullsFirst: false }),
+      supabase.from("expenses").select("*").eq("org_id", orgId).order("incurred_at", { ascending: false }),
     ]);
+
+    const num = (v: unknown) => Number(v ?? 0);
 
     return {
       orgId,
@@ -96,6 +225,17 @@ export const getWorkspace = createServerFn({ method: "GET" })
       commitments: (commitments.data ?? []) as Commitment[],
       sources: (sources.data ?? []) as Source[],
       expectations: (expectations.data ?? []) as Expectation[],
+      dependencies: ((dependencies.data ?? []) as Dependency[]).map((d) => ({ ...d, debt_hours: num(d.debt_hours) })),
+      leads: ((leads.data ?? []) as Lead[]).map((l) => ({ ...l, value: num(l.value) })),
+      leadTouches: (leadTouches.data ?? []) as LeadTouch[],
+      calls: ((calls.data ?? []) as Call[]).map((c) => ({
+        ...c,
+        action_items: Array.isArray(c.action_items) ? (c.action_items as string[]) : [],
+      })),
+      tickets: (tickets.data ?? []) as Ticket[],
+      deals: ((deals.data ?? []) as Deal[]).map((d) => ({ ...d, value: num(d.value) })),
+      invoices: ((invoices.data ?? []) as Invoice[]).map((i) => ({ ...i, amount: num(i.amount) })),
+      expenses: ((expenses.data ?? []) as Expense[]).map((e) => ({ ...e, amount: num(e.amount) })),
     };
   });
 
