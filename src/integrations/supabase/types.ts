@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      calls: {
+        Row: {
+          action_items: Json
+          client_id: string | null
+          created_at: string
+          direction: string
+          duration_seconds: number
+          id: string
+          objections: string | null
+          org_id: string
+          participant: string
+          sentiment: string | null
+          summary: string | null
+          talk_ratio: number | null
+          transcript: string
+        }
+        Insert: {
+          action_items?: Json
+          client_id?: string | null
+          created_at?: string
+          direction?: string
+          duration_seconds?: number
+          id?: string
+          objections?: string | null
+          org_id: string
+          participant: string
+          sentiment?: string | null
+          summary?: string | null
+          talk_ratio?: number | null
+          transcript: string
+        }
+        Update: {
+          action_items?: Json
+          client_id?: string | null
+          created_at?: string
+          direction?: string
+          duration_seconds?: number
+          id?: string
+          objections?: string | null
+          org_id?: string
+          participant?: string
+          sentiment?: string | null
+          summary?: string | null
+          talk_ratio?: number | null
+          transcript?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           account_owner: string | null
@@ -187,6 +250,122 @@ export type Database = {
           },
         ]
       }
+      deals: {
+        Row: {
+          client_id: string | null
+          close_date: string | null
+          created_at: string
+          health_note: string | null
+          health_score: number | null
+          id: string
+          name: string
+          org_id: string
+          owner_name: string | null
+          probability: number
+          stage: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          client_id?: string | null
+          close_date?: string | null
+          created_at?: string
+          health_note?: string | null
+          health_score?: number | null
+          id?: string
+          name: string
+          org_id: string
+          owner_name?: string | null
+          probability?: number
+          stage?: string
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          client_id?: string | null
+          close_date?: string | null
+          created_at?: string
+          health_note?: string | null
+          health_score?: number | null
+          id?: string
+          name?: string
+          org_id?: string
+          owner_name?: string | null
+          probability?: number
+          stage?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dependencies: {
+        Row: {
+          created_at: string
+          criticality: number
+          debt_hours: number
+          id: string
+          kind: string
+          name: string
+          org_id: string
+          risk_note: string | null
+          risk_score: number
+          updated_at: string
+          usage_note: string | null
+          version: string | null
+        }
+        Insert: {
+          created_at?: string
+          criticality?: number
+          debt_hours?: number
+          id?: string
+          kind?: string
+          name: string
+          org_id: string
+          risk_note?: string | null
+          risk_score?: number
+          updated_at?: string
+          usage_note?: string | null
+          version?: string | null
+        }
+        Update: {
+          created_at?: string
+          criticality?: number
+          debt_hours?: number
+          id?: string
+          kind?: string
+          name?: string
+          org_id?: string
+          risk_note?: string | null
+          risk_score?: number
+          updated_at?: string
+          usage_note?: string | null
+          version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dependencies_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expectations: {
         Row: {
           client_id: string
@@ -231,6 +410,209 @@ export type Database = {
           },
           {
             foreignKeyName: "expectations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          client_id: string | null
+          created_at: string
+          description: string
+          id: string
+          incurred_at: string
+          org_id: string
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          client_id?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          incurred_at?: string
+          org_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          client_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          incurred_at?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          amount: number
+          client_id: string | null
+          created_at: string
+          due_at: string | null
+          id: string
+          issued_at: string
+          number: string
+          org_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          client_id?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          issued_at?: string
+          number: string
+          org_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          issued_at?: string
+          number?: string
+          org_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_touches: {
+        Row: {
+          channel: string
+          created_at: string
+          id: string
+          lead_id: string
+          note: string | null
+          org_id: string
+          sentiment: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          id?: string
+          lead_id: string
+          note?: string | null
+          org_id: string
+          sentiment?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          id?: string
+          lead_id?: string
+          note?: string | null
+          org_id?: string
+          sentiment?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_touches_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_touches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          channel: string
+          company: string
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          last_touch_at: string | null
+          notes: string | null
+          org_id: string
+          sentiment: string
+          stage: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          channel?: string
+          company: string
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_touch_at?: string | null
+          notes?: string | null
+          org_id: string
+          sentiment?: string
+          stage?: string
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          channel?: string
+          company?: string
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_touch_at?: string | null
+          notes?: string | null
+          org_id?: string
+          sentiment?: string
+          stage?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -396,6 +778,69 @@ export type Database = {
           },
         ]
       }
+      tickets: {
+        Row: {
+          ai_reply: string | null
+          body: string
+          channel: string
+          client_id: string | null
+          created_at: string
+          id: string
+          org_id: string
+          priority: string
+          requester: string
+          resolution: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          ai_reply?: string | null
+          body: string
+          channel?: string
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          org_id: string
+          priority?: string
+          requester: string
+          resolution?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          ai_reply?: string | null
+          body?: string
+          channel?: string
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string
+          priority?: string
+          requester?: string
+          resolution?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -403,6 +848,7 @@ export type Database = {
     Functions: {
       bootstrap_workspace: { Args: never; Returns: string }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
+      seed_operations_demo: { Args: { v_org: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
