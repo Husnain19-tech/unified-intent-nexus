@@ -5,19 +5,48 @@ import type { ReactNode } from "react";
 import {
   Activity,
   Boxes,
+  Banknote,
+  GitBranch,
   Handshake,
+  LifeBuoy,
   LogOut,
   Network,
+  PhoneCall,
+  Target,
+  TrendingUp,
   Users,
 } from "lucide-react";
 
-const NAV = [
-  { to: "/command", label: "Command Center", icon: Activity },
-  { to: "/commitments", label: "Commitments", icon: Handshake },
-  { to: "/people", label: "People & Reliability", icon: Users },
-  { to: "/knowledge", label: "Knowledge Mesh", icon: Network },
-  { to: "/expectations", label: "Expectation Mapper", icon: Boxes },
+const NAV_GROUPS = [
+  {
+    label: "Intelligence",
+    items: [
+      { to: "/command", label: "Command Center", icon: Activity },
+      { to: "/knowledge", label: "Knowledge Mesh", icon: Network },
+      { to: "/dependencies", label: "Dependency Monitor", icon: GitBranch },
+    ],
+  },
+  {
+    label: "Revenue",
+    items: [
+      { to: "/sales", label: "Sales Orchestrator", icon: Target },
+      { to: "/pipeline", label: "Predictive Pipeline", icon: TrendingUp },
+      { to: "/calls", label: "VoIP Intelligence", icon: PhoneCall },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { to: "/commitments", label: "Commitments", icon: Handshake },
+      { to: "/people", label: "People & Reliability", icon: Users },
+      { to: "/expectations", label: "Expectation Mapper", icon: Boxes },
+      { to: "/support", label: "Customer Support", icon: LifeBuoy },
+      { to: "/finance", label: "Financial Intelligence", icon: Banknote },
+    ],
+  },
 ] as const;
+
+const NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 export function Shell({ children, org }: { children: ReactNode; org?: string | undefined }) {
   const navigate = useNavigate();
