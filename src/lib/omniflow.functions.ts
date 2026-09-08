@@ -419,13 +419,32 @@ export const generateBriefing = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const supabase = context.supabase as unknown as SupabaseLike;
     const orgId = await currentOrg(supabase);
-    const { data } = await supabase.from("commitments").select("*").eq("org_id", orgId);
+    const [{ data }, { data: deals }, { data: invoices }, { data: tickets }, { data: deps }] = await Promise.all([
+      supabase.from("commitments").select("*").eq("org_id", orgId),
+      supabase.from("deals").select("name,stage,value,probability,health_score").eq("org_id", orgId),
+      supabase.from("invoices").select("number,amount,status,due_at").eq("org_id", orgId),
+      supabase.from("tickets").select("subject,priority,status").eq("org_id", orgId),
+      supabase.from("dependencies").select("name,risk_score,criticality").eq("org_id", orgId),
+    ]);
     const rows = (data ?? []) as Commitment[];
     if (rows.length === 0) return { briefing: "No commitments are being tracked yet. Capture a message to get started." };
 
+    const dealLines = ((deals ?? []) as Deal[])
+      .map((d) => `- ${d.name} | ${d.stage} | value ${d.value} | probability ${d.probability}% | health ${d.health_score ?? "?"}`)
+      .join("\n");
+    const invoiceLines = ((invoices ?? []) as Invoice[])
+      .map((i) => `- ${i.number} | ${i.amount} | ${i.status} | due ${i.due_at ?? "n/a"}`)
+      .join("\n");
+    const ticketLines = ((tickets ?? []) as Ticket[])
+      .map((t) => `- [${t.priority}] ${t.subject} (${t.status})`)
+      .join("\n");
+    const depLines = ((deps ?? []) as Dependency[])
+      .map((d) => `- ${d.name} | risk ${d.risk_score} | criticality ${d.criticality}`)
+      .join("\n");
+
     const text = await runPrompt(
-      `Today is ${new Date().toDateString()}.\n\nCommitments:\n${commitmentLines(rows)}`,
-      "You are the operating brain of a company. Write a crisp executive briefing in at most 120 words: what is on fire today, who is overloaded, and the single most valuable action to take now. No headings, no bullet symbols, plain sentences.",
+      `Today is ${new Date().toDateString()}.\n\nCOMMITMENTS:\n${commitmentLines(rows)}\n\nPIPELINE:\n${dealLines}\n\nINVOICES:\n${invoiceLines}\n\nSUPPORT TICKETS:\n${ticketLines}\n\nDEPENDENCIES:\n${depLines}`,
+      "You are the operating brain of a company with visibility over commitments, sales pipeline, cash, support and technical dependencies. Write a crisp executive briefing in at most 140 words: what is on fire today across the whole business, where money or trust is at risk, and the single most valuable action to take now. No headings, no bullet symbols, plain sentences.",
     );
     return { briefing: text.trim() };
   });
