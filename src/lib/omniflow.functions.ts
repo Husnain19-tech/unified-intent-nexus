@@ -493,3 +493,509 @@ export const analyseExpectationGaps = createServerFn({ method: "POST" })
     );
     return { verdict: verdict.trim() };
   });
+
+/* ---------------- Silent Dependency Monitor ---------------- */
+
+export const addDependency = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        name: z.string().min(1).max(120),
+        kind: z.string().min(1).max(40),
+        version: z.string().max(40).optional(),
+        criticality: z.number().min(0).max(100),
+        usage_note: z.string().max(600).optional(),
+        debt_hours: z.number().min(0).max(10000),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const risk = Math.round(Math.min(100, data.criticality * 0.6 + Math.min(40, data.debt_hours)));
+    const { error } = await supabase.from("dependencies").insert({
+      org_id: orgId,
+      name: data.name,
+      kind: data.kind,
+      version: data.version ?? null,
+      criticality: data.criticality,
+      usage_note: data.usage_note ?? null,
+      debt_hours: data.debt_hours,
+      risk_score: risk,
+      risk_note: null,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const analyseDependency = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const [{ data: dep }, { data: commitments }] = await Promise.all([
+      supabase.from("dependencies").select("*").eq("id", data.id).eq("org_id", orgId).maybeSingle(),
+      supabase.from("commitments").select("*").eq("org_id", orgId).eq("status", "open"),
+    ]);
+    if (!dep) throw new Error("Dependency not found.");
+    const d = dep as Dependency;
+
+    const forecast = await runPrompt(
+      `DEPENDENCY: ${d.name} (${d.kind}, version ${d.version ?? "unknown"})\nCriticality: ${d.criticality}/100\nHow it is used: ${d.usage_note ?? "unspecified"}\nLogged shortcut cost: ${d.debt_hours} hours\n\nOPEN COMMITMENTS THAT COULD BE AFFECTED:\n${commitmentLines((commitments ?? []) as Commitment[]) || "none"}`,
+      "You forecast breakage. In at most 110 words: state the specific way this dependency is most likely to break given how it is used, which of the listed commitments would be hit, and a concrete migration path with a first step. Plain sentences, no headings.",
+    );
+    await supabase.from("dependencies").update({ risk_note: forecast.trim() }).eq("id", data.id).eq("org_id", orgId);
+    return { forecast: forecast.trim() };
+  });
+
+/* ---------------- AI Sales Orchestrator ---------------- */
+
+export const addLead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        company: z.string().min(1).max(120),
+        contact_name: z.string().max(120).optional(),
+        email: z.string().max(160).optional(),
+        channel: z.string().min(1).max(40),
+        value: z.number().min(0).max(100000000),
+        notes: z.string().max(600).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { error } = await supabase.from("leads").insert({
+      org_id: orgId,
+      company: data.company,
+      contact_name: data.contact_name ?? null,
+      email: data.email ?? null,
+      channel: data.channel,
+      value: data.value,
+      notes: data.notes ?? null,
+      stage: "new",
+      sentiment: "neutral",
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const logLeadTouch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        leadId: z.string().uuid(),
+        channel: z.string().min(1).max(40),
+        note: z.string().min(1).max(600),
+        sentiment: z.enum(["cold", "neutral", "warm", "hot"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { error } = await supabase.from("lead_touches").insert({
+      org_id: orgId,
+      lead_id: data.leadId,
+      channel: data.channel,
+      note: data.note,
+      sentiment: data.sentiment,
+    });
+    if (error) throw new Error(error.message);
+    await supabase
+      .from("leads")
+      .update({ sentiment: data.sentiment, last_touch_at: new Date().toISOString(), stage: "contacted" })
+      .eq("id", data.leadId)
+      .eq("org_id", orgId);
+    return { ok: true };
+  });
+
+export const setLeadStage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({ id: z.string().uuid(), stage: z.enum(["new", "contacted", "qualified", "proposal", "won", "lost"]) })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { error } = await supabase.from("leads").update({ stage: data.stage }).eq("id", data.id).eq("org_id", orgId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const draftOutreach = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ leadId: z.string().uuid(), channel: z.enum(["email", "call", "linkedin"]) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const [{ data: lead }, { data: touches }] = await Promise.all([
+      supabase.from("leads").select("*").eq("id", data.leadId).eq("org_id", orgId).maybeSingle(),
+      supabase.from("lead_touches").select("*").eq("lead_id", data.leadId).eq("org_id", orgId).order("created_at", { ascending: false }),
+    ]);
+    if (!lead) throw new Error("Lead not found.");
+    const l = lead as Lead;
+    const history = ((touches ?? []) as LeadTouch[])
+      .map((t) => `- ${new Date(t.created_at).toDateString()} via ${t.channel} (${t.sentiment}): ${t.note ?? ""}`)
+      .join("\n");
+
+    const draft = await runPrompt(
+      `LEAD: ${l.company}\nContact: ${l.contact_name ?? "unknown"}\nStage: ${l.stage}\nDeal value: ${l.value}\nCurrent sentiment: ${l.sentiment}\nLast touch: ${l.last_touch_at ? new Date(l.last_touch_at).toDateString() : "never"}\nNotes: ${l.notes ?? "none"}\n\nTOUCH HISTORY:\n${history || "no touches yet"}\n\nCHANNEL TO WRITE FOR: ${data.channel}\nToday is ${new Date().toDateString()}.`,
+      "You are a disciplined sales orchestrator. Return exactly two parts, separated by a line containing only ---. Part one: the outreach message itself for the requested channel, personalised to this lead, under 120 words, no placeholders. Part two: one sentence recommending when to follow up next and why, based on the last touch and sentiment.",
+    );
+    const [message, timing] = draft.split(/\n?---\n?/);
+    return { message: (message ?? draft).trim(), timing: (timing ?? "").trim() };
+  });
+
+/* ---------------- VoIP Intelligence ---------------- */
+
+export const analyseCall = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        participant: z.string().min(1).max(120),
+        direction: z.enum(["inbound", "outbound"]),
+        duration_seconds: z.number().min(0).max(86400),
+        transcript: z.string().min(20).max(20000),
+        clientId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI is not configured for this project.");
+
+    const { createLovableAiGatewayProvider, OMNIFLOW_MODEL } = await import("./ai-gateway.server");
+    const { streamText, Output, NoObjectGeneratedError } = await import("ai");
+    const gateway = createLovableAiGatewayProvider(key);
+
+    const schema = z.object({
+      summary: z.string(),
+      sentiment: z.string(),
+      objections: z.string(),
+      talk_ratio: z.number(),
+      action_items: z.array(z.string()),
+    });
+
+    let parsed: z.infer<typeof schema>;
+    try {
+      const result = streamText({
+        model: gateway(OMNIFLOW_MODEL),
+        output: Output.object({ schema }),
+        prompt: `Analyse this call transcript. talk_ratio is the percentage of the conversation spoken by our side (0-100). sentiment is one of positive, neutral, mixed, negative. objections is a short comma separated list, or an empty string. action_items is a list of short imperative next steps, at most five.\n\nPARTICIPANT: ${data.participant}\nDIRECTION: ${data.direction}\n\nTRANSCRIPT:\n${data.transcript}`,
+      });
+      parsed = await result.output;
+    } catch (error) {
+      if (NoObjectGeneratedError.isInstance(error) && error.text) {
+        try {
+          parsed = schema.parse(JSON.parse(error.text));
+        } catch {
+          throw new Error("The AI response could not be read. Try again.");
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    const { data: row, error } = await supabase
+      .from("calls")
+      .insert({
+        org_id: orgId,
+        client_id: data.clientId ?? null,
+        participant: data.participant,
+        direction: data.direction,
+        duration_seconds: data.duration_seconds,
+        transcript: data.transcript,
+        summary: parsed.summary.slice(0, 800),
+        sentiment: parsed.sentiment.slice(0, 40),
+        objections: parsed.objections.slice(0, 400),
+        talk_ratio: Math.max(0, Math.min(100, Math.round(parsed.talk_ratio ?? 50))),
+        action_items: parsed.action_items.slice(0, 5).map((a) => a.slice(0, 200)),
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { callId: row.id as string, summary: parsed.summary, actionItems: parsed.action_items.slice(0, 5) };
+  });
+
+export const promoteToCommitment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        promise: z.string().min(3).max(400),
+        owner_name: z.string().min(1).max(120),
+        counterparty: z.string().max(120).optional(),
+        clientId: z.string().uuid().nullable().optional(),
+        due_in_days: z.number().min(0).max(365).default(5),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { error } = await supabase.from("commitments").insert({
+      org_id: orgId,
+      client_id: data.clientId ?? null,
+      owner_name: data.owner_name,
+      counterparty: data.counterparty ?? null,
+      promise: data.promise,
+      due_at: new Date(Date.now() + data.due_in_days * 86400000).toISOString(),
+      status: "open",
+      risk_score: 45,
+      risk_label: "at_risk",
+      risk_reason: "Promoted from a call or support ticket and not yet started.",
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/* ---------------- Autonomous Customer Support ---------------- */
+
+export const addTicket = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        requester: z.string().min(1).max(120),
+        channel: z.string().min(1).max(40),
+        priority: z.enum(["low", "normal", "high", "urgent"]),
+        subject: z.string().min(1).max(200),
+        body: z.string().min(1).max(4000),
+        clientId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { error } = await supabase.from("tickets").insert({
+      org_id: orgId,
+      client_id: data.clientId ?? null,
+      requester: data.requester,
+      channel: data.channel,
+      priority: data.priority,
+      subject: data.subject,
+      body: data.body,
+      status: "open",
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const draftTicketReply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const [{ data: ticket }, { data: sources }, { data: commitments }] = await Promise.all([
+      supabase.from("tickets").select("*").eq("id", data.id).eq("org_id", orgId).maybeSingle(),
+      supabase.from("sources").select("title,content").eq("org_id", orgId).limit(20),
+      supabase.from("commitments").select("*").eq("org_id", orgId).limit(60),
+    ]);
+    if (!ticket) throw new Error("Ticket not found.");
+    const t = ticket as Ticket;
+
+    const corpus = ((sources ?? []) as Source[]).map((s) => `${s.title}\n${s.content}`).join("\n\n---\n\n");
+
+    const raw = await runPrompt(
+      `TICKET FROM ${t.requester} (${t.priority} priority, via ${t.channel})\nSubject: ${t.subject}\n\n${t.body}\n\nOUR OWN RECORD:\n${corpus}\n\nTRACKED COMMITMENTS:\n${commitmentLines((commitments ?? []) as Commitment[])}`,
+      "You are an AI receptionist that only answers from the organisation's own record. Reply with a line that reads exactly RESOLVE or ESCALATE, then a line containing only ---, then the customer-facing reply in under 120 words. Choose ESCALATE when the answer is not in the record, when a promise or date must be changed, or when the customer is upset.",
+    );
+    const [verdictLine, ...rest] = raw.split(/\n?---\n?/);
+    const decision = /escalate/i.test(verdictLine ?? "") ? "human" : "auto";
+    const reply = (rest.join("---") || raw).trim();
+
+    await supabase
+      .from("tickets")
+      .update({ ai_reply: reply, resolution: decision, status: decision === "auto" ? "resolved" : "escalated" })
+      .eq("id", data.id)
+      .eq("org_id", orgId);
+
+    return { reply, decision };
+  });
+
+export const setTicketStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), status: z.enum(["open", "resolved", "escalated"]) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { error } = await supabase.from("tickets").update({ status: data.status }).eq("id", data.id).eq("org_id", orgId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/* ---------------- Predictive Pipeline ---------------- */
+
+export const setDealStage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        stage: z.enum(["qualify", "discovery", "proposal", "negotiation", "closed_won", "closed_lost"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const probability =
+      data.stage === "closed_won" ? 100 : data.stage === "closed_lost" ? 0 : { qualify: 30, discovery: 40, proposal: 55, negotiation: 75 }[data.stage];
+    const { error } = await supabase
+      .from("deals")
+      .update({ stage: data.stage, probability })
+      .eq("id", data.id)
+      .eq("org_id", orgId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const scoreDeal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { data: deal } = await supabase.from("deals").select("*").eq("id", data.id).eq("org_id", orgId).maybeSingle();
+    if (!deal) throw new Error("Deal not found.");
+    const d = deal as Deal;
+
+    const [{ data: expectations }, { data: commitments }] = await Promise.all([
+      d.client_id
+        ? supabase.from("expectations").select("*").eq("client_id", d.client_id).eq("org_id", orgId)
+        : Promise.resolve({ data: [] }),
+      d.client_id
+        ? supabase.from("commitments").select("*").eq("client_id", d.client_id).eq("org_id", orgId)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const exp = (expectations ?? []) as Expectation[];
+    const com = (commitments ?? []) as Commitment[];
+    const avgGap = exp.length ? exp.reduce((s, e) => s + (e.gap_score ?? 0), 0) / exp.length : 0;
+    const broken = com.filter((c) => c.status === "broken").length;
+    const overdue = com.filter((c) => c.status === "open" && c.due_at && new Date(c.due_at).getTime() < Date.now()).length;
+    const health = Math.max(0, Math.min(100, Math.round(d.probability - avgGap * 0.4 - broken * 12 - overdue * 6 + 15)));
+
+    const note = await runPrompt(
+      `DEAL: ${d.name}\nStage: ${d.stage}\nValue: ${d.value}\nProbability: ${d.probability}%\nClose date: ${d.close_date ?? "unset"}\nAverage client expectation gap: ${Math.round(avgGap)}\nBroken commitments to this client: ${broken}\nOverdue commitments to this client: ${overdue}\nComputed health score: ${health}`,
+      "In at most 60 words, explain what is really driving this deal's health score and the one thing that would move it most. Plain sentences.",
+    );
+
+    await supabase.from("deals").update({ health_score: health, health_note: note.trim() }).eq("id", data.id).eq("org_id", orgId);
+    return { health, note: note.trim() };
+  });
+
+export const analysePipeline = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const [{ data: deals }, { data: leads }] = await Promise.all([
+      supabase.from("deals").select("*").eq("org_id", orgId),
+      supabase.from("leads").select("*").eq("org_id", orgId),
+    ]);
+    const rows = (deals ?? []) as Deal[];
+    if (rows.length === 0) return { verdict: "No deals in the pipeline yet." };
+
+    const dealLines = rows
+      .map((d) => `- ${d.name} | ${d.stage} | ${d.value} | ${d.probability}% | health ${d.health_score ?? "unscored"} | closes ${d.close_date ?? "unset"}`)
+      .join("\n");
+    const leadLines = ((leads ?? []) as Lead[])
+      .map((l) => `- ${l.company} | ${l.stage} | ${l.value} | ${l.sentiment}`)
+      .join("\n");
+
+    const verdict = await runPrompt(
+      `Today is ${new Date().toDateString()}.\n\nDEALS:\n${dealLines}\n\nLEADS:\n${leadLines}`,
+      "You are a revenue operator. In at most 120 words: name the stage where deals are stalling, the single deal most at risk of slipping this quarter, and where the team should spend this week for the biggest weighted gain. Plain sentences.",
+    );
+    return { verdict: verdict.trim() };
+  });
+
+/* ---------------- Financial Intelligence ---------------- */
+
+export const setInvoiceStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), status: z.enum(["draft", "sent", "paid", "overdue"]) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const { error } = await supabase.from("invoices").update({ status: data.status }).eq("id", data.id).eq("org_id", orgId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const addInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        number: z.string().min(1).max(40),
+        amount: z.number().min(0).max(100000000),
+        due_in_days: z.number().min(0).max(365),
+        clientId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const due = new Date(Date.now() + data.due_in_days * 86400000).toISOString().slice(0, 10);
+    const { error } = await supabase.from("invoices").insert({
+      org_id: orgId,
+      client_id: data.clientId ?? null,
+      number: data.number,
+      amount: data.amount,
+      due_at: due,
+      status: "sent",
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const analyseCashflow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const [{ data: invoices }, { data: expenses }, { data: deals }] = await Promise.all([
+      supabase.from("invoices").select("*").eq("org_id", orgId),
+      supabase.from("expenses").select("*").eq("org_id", orgId),
+      supabase.from("deals").select("name,stage,value,probability,close_date").eq("org_id", orgId),
+    ]);
+
+    const inv = ((invoices ?? []) as Invoice[])
+      .map((i) => `- ${i.number} | ${Number(i.amount)} | ${i.status} | due ${i.due_at ?? "n/a"}`)
+      .join("\n");
+    const exp = ((expenses ?? []) as Expense[])
+      .map((e) => `- ${e.category}: ${e.description} | ${Number(e.amount)} | ${e.incurred_at}`)
+      .join("\n");
+    const dl = ((deals ?? []) as Deal[])
+      .map((d) => `- ${d.name} | ${d.stage} | ${Number(d.value)} | ${d.probability}% | closes ${d.close_date ?? "unset"}`)
+      .join("\n");
+
+    const commentary = await runPrompt(
+      `Today is ${new Date().toDateString()}.\n\nINVOICES:\n${inv || "none"}\n\nEXPENSES:\n${exp || "none"}\n\nPIPELINE:\n${dl || "none"}`,
+      "You are a CFO. In at most 120 words: state the cash position risk over the next 90 days, which receivable to chase first and why, and one cost or pricing action worth taking. Plain sentences, no headings.",
+    );
+    return { commentary: commentary.trim() };
+  });
+
