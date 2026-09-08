@@ -46,7 +46,8 @@ const NAV_GROUPS = [
   },
 ] as const;
 
-const NAV = NAV_GROUPS.flatMap((g) => g.items);
+type NavItem = (typeof NAV_GROUPS)[number]["items"][number];
+const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => [...g.items] as NavItem[]);
 
 export function Shell({ children, org }: { children: ReactNode; org?: string | undefined }) {
   const navigate = useNavigate();
