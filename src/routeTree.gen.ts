@@ -14,9 +14,11 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCommandRouteImport } from './routes/_authenticated/command'
 import { Route as AuthenticatedCommitmentsRouteImport } from './routes/_authenticated/commitments'
+import { Route as AuthenticatedDependenciesRouteImport } from './routes/_authenticated/dependencies'
 import { Route as AuthenticatedExpectationsRouteImport } from './routes/_authenticated/expectations'
 import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
 import { Route as AuthenticatedPeopleRouteImport } from './routes/_authenticated/people'
+import { Route as AuthenticatedSalesRouteImport } from './routes/_authenticated/sales'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -43,6 +45,12 @@ const AuthenticatedCommitmentsRoute =
     path: '/commitments',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDependenciesRoute =
+  AuthenticatedDependenciesRouteImport.update({
+    id: '/dependencies',
+    path: '/dependencies',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedExpectationsRoute =
   AuthenticatedExpectationsRouteImport.update({
     id: '/expectations',
@@ -59,24 +67,33 @@ const AuthenticatedPeopleRoute = AuthenticatedPeopleRouteImport.update({
   path: '/people',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSalesRoute = AuthenticatedSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/command': typeof AuthenticatedCommandRoute
   '/commitments': typeof AuthenticatedCommitmentsRoute
+  '/dependencies': typeof AuthenticatedDependenciesRoute
   '/expectations': typeof AuthenticatedExpectationsRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/people': typeof AuthenticatedPeopleRoute
+  '/sales': typeof AuthenticatedSalesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/command': typeof AuthenticatedCommandRoute
   '/commitments': typeof AuthenticatedCommitmentsRoute
+  '/dependencies': typeof AuthenticatedDependenciesRoute
   '/expectations': typeof AuthenticatedExpectationsRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/people': typeof AuthenticatedPeopleRoute
+  '/sales': typeof AuthenticatedSalesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,9 +102,11 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/command': typeof AuthenticatedCommandRoute
   '/_authenticated/commitments': typeof AuthenticatedCommitmentsRoute
+  '/_authenticated/dependencies': typeof AuthenticatedDependenciesRoute
   '/_authenticated/expectations': typeof AuthenticatedExpectationsRoute
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
   '/_authenticated/people': typeof AuthenticatedPeopleRoute
+  '/_authenticated/sales': typeof AuthenticatedSalesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,18 +115,22 @@ export interface FileRouteTypes {
     | '/auth'
     | '/command'
     | '/commitments'
+    | '/dependencies'
     | '/expectations'
     | '/knowledge'
     | '/people'
+    | '/sales'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/command'
     | '/commitments'
+    | '/dependencies'
     | '/expectations'
     | '/knowledge'
     | '/people'
+    | '/sales'
   id:
     | '__root__'
     | '/'
@@ -115,9 +138,11 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/command'
     | '/_authenticated/commitments'
+    | '/_authenticated/dependencies'
     | '/_authenticated/expectations'
     | '/_authenticated/knowledge'
     | '/_authenticated/people'
+    | '/_authenticated/sales'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -163,6 +188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommitmentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/dependencies': {
+      id: '/_authenticated/dependencies'
+      path: '/dependencies'
+      fullPath: '/dependencies'
+      preLoaderRoute: typeof AuthenticatedDependenciesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/expectations': {
       id: '/_authenticated/expectations'
       path: '/expectations'
@@ -184,23 +216,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPeopleRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/sales': {
+      id: '/_authenticated/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof AuthenticatedSalesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCommandRoute: typeof AuthenticatedCommandRoute
   AuthenticatedCommitmentsRoute: typeof AuthenticatedCommitmentsRoute
+  AuthenticatedDependenciesRoute: typeof AuthenticatedDependenciesRoute
   AuthenticatedExpectationsRoute: typeof AuthenticatedExpectationsRoute
   AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
   AuthenticatedPeopleRoute: typeof AuthenticatedPeopleRoute
+  AuthenticatedSalesRoute: typeof AuthenticatedSalesRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCommandRoute: AuthenticatedCommandRoute,
   AuthenticatedCommitmentsRoute: AuthenticatedCommitmentsRoute,
+  AuthenticatedDependenciesRoute: AuthenticatedDependenciesRoute,
   AuthenticatedExpectationsRoute: AuthenticatedExpectationsRoute,
   AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
   AuthenticatedPeopleRoute: AuthenticatedPeopleRoute,
+  AuthenticatedSalesRoute: AuthenticatedSalesRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
