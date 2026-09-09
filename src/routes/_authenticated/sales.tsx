@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/sales")({
       { property: "og:description", content: "Personalised outreach with the right timing." },
     ],
   }),
-  component: SalesPage;
+  component: SalesPage,
 });
 
 function money(n: number) {
