@@ -209,14 +209,12 @@ function CallsPage() {
                         key={i}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background/40 p-3 text-sm"
                       >
-                        <span className="min-w-0">
-                          <span className="font-medium">{a.owner}</span> — {a.text}
-                        </span>
+                        <span className="min-w-0">{a}</span>
                         <button
                           onClick={() =>
                             promote.mutate({
-                              promise: a.text,
-                              owner: a.owner,
+                              promise: a,
+                              owner: data?.displayName ?? "Owner",
                               counterparty: c.participant,
                               clientId: c.client_id,
                             })

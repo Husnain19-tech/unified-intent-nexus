@@ -74,7 +74,7 @@ function SupportPage() {
   const reply = useMutation({
     mutationFn: (id: string) => replyFn({ data: { id } }),
     onSuccess: (res) => {
-      toast.success(res.decision === "escalate" ? "Escalated to a human." : "Draft reply ready.");
+      toast.success(res.decision === "human" ? "Escalated to a human." : "Draft reply ready.");
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
