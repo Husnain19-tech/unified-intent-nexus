@@ -68,17 +68,24 @@ export function Shell({ children, org }: { children: ReactNode; org?: string | u
             <span className="live-dot inline-block h-2 w-2 rounded-full bg-primary" />
             <span className="font-display text-lg font-bold tracking-tight">OmniFlow</span>
           </div>
-          <nav className="flex flex-1 flex-col gap-1 p-3">
-            {NAV.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                activeProps={{ className: "bg-accent text-foreground" }}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </Link>
+          <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-3">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label} className="flex flex-col gap-1">
+                <div className="px-3 pb-1 text-[10px] uppercase tracking-widest text-muted-foreground/70">
+                  {group.label}
+                </div>
+                {group.items.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    activeProps={{ className: "bg-accent text-foreground" }}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
             ))}
           </nav>
           <div className="border-t border-border p-3">

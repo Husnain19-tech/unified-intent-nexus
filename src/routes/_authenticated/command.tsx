@@ -22,6 +22,10 @@ export const Route = createFileRoute("/_authenticated/command")({
   component: CommandCenter,
 });
 
+function money(n: number) {
+  return "$" + Math.round(n).toLocaleString();
+}
+
 function Metric({ label, value, tone }: { label: string; value: string | number; tone?: string | undefined }) {
   return (
     <div className="panel p-4">
@@ -61,6 +65,18 @@ function CommandCenter() {
 
   const hotspots = [...open].sort((a, b) => (b.risk_score ?? 0) - (a.risk_score ?? 0)).slice(0, 5);
 
+  const deals = data?.deals ?? [];
+  const weightedPipeline = deals
+    .filter((d) => d.stage !== "closed_won" && d.stage !== "closed_lost")
+    .reduce((s, d) => s + (d.value * d.probability) / 100, 0);
+  const invoices = data?.invoices ?? [];
+  const overdueCash = invoices.filter((i) => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
+  const tickets = data?.tickets ?? [];
+  const deflection = tickets.length
+    ? Math.round((tickets.filter((t) => t.status === "resolved").length / tickets.length) * 100)
+    : 0;
+  const fragileDeps = (data?.dependencies ?? []).filter((d) => d.risk_score >= 70).length;
+
   return (
     <Shell org={data?.orgName}>
       <PageHead
@@ -81,6 +97,18 @@ function CommandCenter() {
               tone="text-warn"
             />
             <Metric label="Delivery rate" value={`${reliability}%`} tone="text-success" />
+            <Metric label="Weighted pipeline" value={money(weightedPipeline)} tone="text-success" />
+            <Metric
+              label="Overdue receivables"
+              value={money(overdueCash)}
+              tone={overdueCash ? "text-destructive" : "text-foreground"}
+            />
+            <Metric label="Support deflection" value={`${deflection}%`} tone="text-primary" />
+            <Metric
+              label="Fragile dependencies"
+              value={fragileDeps}
+              tone={fragileDeps ? "text-warn" : "text-success"}
+            />
           </div>
 
           <div className="panel p-5">
