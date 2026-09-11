@@ -537,26 +537,91 @@ export const generateBriefing = createServerFn({ method: "POST" })
     return { briefing: text.trim() };
   });
 
+export const reindexKnowledge = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI is not configured for this project.");
+    const knowledge = await import("./knowledge.server");
+    return await knowledge.reindexWorkspace(supabase, key, orgId);
+  });
+
 export const askKnowledge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ question: z.string().min(3).max(500) }).parse(input))
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as unknown as SupabaseLike;
     const orgId = await currentOrg(supabase);
-    const [{ data: sources }, { data: commitments }] = await Promise.all([
-      supabase.from("sources").select("title,channel,content,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(40),
-      supabase.from("commitments").select("*").eq("org_id", orgId).limit(80),
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI is not configured for this project.");
+
+    const knowledge = await import("./knowledge.server");
+    const { createLovableResponsesProvider, OMNIFLOW_REASONING_MODEL, REASONING_OPTIONS } = await import(
+      "./ai-gateway.server"
+    );
+    const { streamText } = await import("ai");
+
+    // Make sure everything recorded so far has a vector before searching.
+    const { count } = await supabase
+      .from("knowledge_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", orgId);
+    if (!count) await knowledge.reindexWorkspace(supabase, key, orgId);
+
+    const queryVector = await knowledge.embedQuery(key, data.question);
+    const [passages, promiseMatches] = await Promise.all([
+      knowledge.searchChunks(supabase, orgId, queryVector, "source", 10),
+      knowledge.searchChunks(supabase, orgId, queryVector, "commitment", 6),
     ]);
 
-    const corpus = ((sources ?? []) as Source[])
-      .map((s) => `[${s.channel}] ${s.title} (${new Date(s.created_at).toDateString()})\n${s.content}`)
+    const sourceIds = Array.from(new Set(passages.map((p) => p.source_id).filter(Boolean))) as string[];
+    const { data: sourceRows } = sourceIds.length
+      ? await supabase.from("sources").select("id,title,channel,created_at").in("id", sourceIds)
+      : { data: [] };
+    const sourceById = new Map(
+      ((sourceRows ?? []) as { id: string; title: string; channel: string; created_at: string }[]).map((s) => [s.id, s]),
+    );
+
+    const context_ = passages
+      .map((p, i) => {
+        const s = p.source_id ? sourceById.get(p.source_id) : undefined;
+        const label = s ? `${s.title} [${s.channel}, ${new Date(s.created_at).toDateString()}]` : (p.heading ?? "Note");
+        return `[${i + 1}] ${label} (relevance ${(p.similarity * 100).toFixed(0)}%)\n${p.content}`;
+      })
       .join("\n\n---\n\n");
 
-    const answer = await runPrompt(
-      `ORGANISATIONAL RECORD:\n${corpus}\n\nTRACKED COMMITMENTS:\n${commitmentLines((commitments ?? []) as Commitment[])}\n\nQUESTION: ${data.question}`,
-      "You answer questions strictly from the organisation's own recorded messages, notes and commitments. Explain the why behind decisions and cite the note title you used. If the record does not contain the answer, say so plainly. Maximum 130 words.",
-    );
-    return { answer: answer.trim() };
+    const promiseContext = promiseMatches
+      .map((m) => `- ${m.content} (relevance ${(m.similarity * 100).toFixed(0)}%)`)
+      .join("\n");
+
+    if (!context_ && !promiseContext) {
+      return { answer: "There is nothing recorded yet, so the memory has no answer to give.", citations: [] };
+    }
+
+    const result = streamText({
+      model: (createLovableResponsesProvider(key)).responses(OMNIFLOW_REASONING_MODEL),
+      system:
+        "You answer strictly from the organisation's own retrieved passages and tracked promises. Explain the reasoning behind decisions, quote sparingly, and cite the passage numbers you used like [2]. If the retrieved material does not contain the answer, say so plainly instead of guessing. Maximum 150 words.",
+      prompt: `RETRIEVED PASSAGES:\n${context_ || "none"}\n\nRELATED TRACKED PROMISES:\n${promiseContext || "none"}\n\nQUESTION: ${data.question}`,
+      providerOptions: REASONING_OPTIONS as any,
+    });
+
+    const answer = await result.text;
+
+    const citations = passages.slice(0, 5).map((p, i) => {
+      const s = p.source_id ? sourceById.get(p.source_id) : undefined;
+      return {
+        index: i + 1,
+        title: s?.title ?? p.heading ?? "Note",
+        channel: s?.channel ?? "note",
+        similarity: Math.round(p.similarity * 100),
+        excerpt: p.content.slice(0, 220),
+      };
+    });
+
+    return { answer: answer.trim(), citations };
   });
 
 export const analyseExpectationGaps = createServerFn({ method: "POST" })
