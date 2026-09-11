@@ -1,4 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createOpenAI } from "@ai-sdk/openai";
 
 export function createLovableAiGatewayProvider(apiKey: string) {
   return createOpenAICompatible({
@@ -8,7 +9,30 @@ export function createLovableAiGatewayProvider(apiKey: string) {
   });
 }
 
-export const OMNIFLOW_MODEL = "openai/gpt-6-astra";
+/** Reasoning provider (OpenAI Responses API) used by the language-understanding features. */
+export function createLovableResponsesProvider(apiKey: string) {
+  return createOpenAI({
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    apiKey,
+    headers: {
+      "Lovable-API-Key": apiKey,
+      "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+    },
+  });
+}
+
+export const OMNIFLOW_REASONING_MODEL = "openai/gpt-6-astra";
+export const REASONING_OPTIONS = {
+  openai: {
+    forceReasoning: true,
+    reasoningEffort: "low",
+    reasoningSummary: "auto",
+    store: false,
+    include: ["reasoning.encrypted_content"],
+  },
+} as const;
+
+export const OMNIFLOW_MODEL = "google/gemini-3.7-flash";
 export const OMNIFLOW_EMBEDDING_MODEL = "google/gemini-embedding-2";
 
 /** Split long text into overlapping, sentence-aware chunks for embedding. */
