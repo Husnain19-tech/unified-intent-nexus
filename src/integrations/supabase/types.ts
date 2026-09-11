@@ -519,6 +519,67 @@ export type Database = {
           },
         ]
       }
+      knowledge_chunks: {
+        Row: {
+          chunk_index: number
+          commitment_id: string | null
+          content: string
+          created_at: string
+          embedding: string
+          heading: string | null
+          id: string
+          kind: string
+          org_id: string
+          source_id: string | null
+        }
+        Insert: {
+          chunk_index?: number
+          commitment_id?: string | null
+          content: string
+          created_at?: string
+          embedding: string
+          heading?: string | null
+          id?: string
+          kind?: string
+          org_id: string
+          source_id?: string | null
+        }
+        Update: {
+          chunk_index?: number
+          commitment_id?: string | null
+          content?: string
+          created_at?: string
+          embedding?: string
+          heading?: string | null
+          id?: string
+          kind?: string
+          org_id?: string
+          source_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_commitment_id_fkey"
+            columns: ["commitment_id"]
+            isOneToOne: false
+            referencedRelation: "commitments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_touches: {
         Row: {
           channel: string
@@ -848,6 +909,22 @@ export type Database = {
     Functions: {
       bootstrap_workspace: { Args: never; Returns: string }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
+      match_knowledge_chunks: {
+        Args: {
+          match_count?: number
+          query_embedding: string
+          v_kind?: string
+          v_org: string
+        }
+        Returns: {
+          commitment_id: string
+          content: string
+          heading: string
+          id: string
+          similarity: number
+          source_id: string
+        }[]
+      }
       seed_operations_demo: { Args: { v_org: string }; Returns: undefined }
     }
     Enums: {

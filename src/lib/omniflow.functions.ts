@@ -255,15 +255,20 @@ export const ingestSource = createServerFn({ method: "POST" })
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) throw new Error("AI is not configured for this project.");
 
-    const { createLovableAiGatewayProvider, OMNIFLOW_MODEL } = await import("./ai-gateway.server");
-    const { generateText, Output, NoObjectGeneratedError } = await import("ai");
-    const gateway = createLovableAiGatewayProvider(key);
+    const { createLovableResponsesProvider, OMNIFLOW_REASONING_MODEL, REASONING_OPTIONS } = await import(
+      "./ai-gateway.server"
+    );
+    const knowledge = await import("./knowledge.server");
+    const { streamText, Output, NoObjectGeneratedError } = await import("ai");
+    const responses = createLovableResponsesProvider(key);
 
     const { data: people } = await supabase.from("people").select("id,name").eq("org_id", orgId);
     const { data: clients } = await supabase.from("clients").select("id,name").eq("org_id", orgId);
 
     const schema = z.object({
       summary: z.string(),
+      topics: z.array(z.string()),
+      decisions: z.array(z.object({ decision: z.string(), rationale: z.string() })),
       commitments: z.array(
         z.object({
           owner_name: z.string(),
@@ -272,6 +277,7 @@ export const ingestSource = createServerFn({ method: "POST" })
           quote: z.string(),
           due_in_days: z.number(),
           client_name: z.string(),
+          depends_on_promise: z.string(),
           risk_score: z.number(),
           risk_label: z.string(),
           risk_reason: z.string(),
@@ -280,18 +286,22 @@ export const ingestSource = createServerFn({ method: "POST" })
     });
 
     const prompt = [
-      "You analyse workplace communication and extract explicit or implied promises (commitments).",
+      `Today is ${new Date().toDateString()}.`,
+      "You are a language-understanding engine for workplace communication. Read the text closely and resolve",
+      "pronouns, nicknames and implicit subjects to real people before deciding who owns each promise.",
       "Known team members: " + ((people ?? []) as Person[]).map((p) => p.name).join(", "),
       "Known clients: " + ((clients ?? []) as Client[]).map((c) => c.name).join(", "),
       "",
-      "For every promise return: who owns it (owner_name), who it is owed to (counterparty),",
-      "a short imperative description (promise), the exact sentence it came from (quote),",
-      "due_in_days as a whole number of days from today (use 0 if it is due today, and your best estimate otherwise),",
-      "client_name if it is clearly tied to one of the known clients otherwise an empty string,",
-      "risk_score 0-100 for the chance it slips, risk_label as exactly one of on_track, at_risk, slipping,",
-      "and one sentence of risk_reason.",
-      "Also return a one sentence summary of the whole text.",
-      "If there are no promises at all, return an empty commitments array.",
+      "Extract every commitment — explicit ('I will send X by Friday') and implied ('leave that with me').",
+      "Ignore hypotheticals, questions and things already completed.",
+      "For each: owner_name (resolved to a known team member when possible), counterparty (who it is owed to),",
+      "promise (short imperative), quote (the exact sentence it came from),",
+      "due_in_days as a whole number of days from today, resolving relative language such as 'end of week' or 'next Tuesday',",
+      "client_name when clearly tied to a known client otherwise an empty string,",
+      "depends_on_promise: if this promise can only happen after another promise in the same text, repeat that other promise here, otherwise an empty string,",
+      "risk_score 0-100 for the chance it slips, risk_label exactly one of on_track, at_risk, slipping, and one sentence of risk_reason.",
+      "Also return a one sentence summary, up to five topics, and every decision made with the reasoning behind it.",
+      "Return empty arrays when nothing applies.",
       "",
       "TEXT:",
       data.content,
@@ -299,12 +309,13 @@ export const ingestSource = createServerFn({ method: "POST" })
 
     let parsed: z.infer<typeof schema>;
     try {
-      const result = await generateText({
-        model: gateway(OMNIFLOW_MODEL),
+      const result = streamText({
+        model: responses.responses(OMNIFLOW_REASONING_MODEL),
         output: Output.object({ schema }),
         prompt,
+        providerOptions: REASONING_OPTIONS as any,
       });
-      parsed = result.output;
+      parsed = await result.output;
     } catch (error) {
       if (NoObjectGeneratedError.isInstance(error) && error.text) {
         try {
@@ -317,6 +328,10 @@ export const ingestSource = createServerFn({ method: "POST" })
       }
     }
 
+    const decisionNote = parsed.decisions
+      .map((d) => `Decision: ${d.decision} — because ${d.rationale}`)
+      .join("\n");
+
     const { data: source, error: sourceError } = await supabase
       .from("sources")
       .insert({
@@ -324,17 +339,48 @@ export const ingestSource = createServerFn({ method: "POST" })
         title: data.title,
         channel: data.channel,
         content: data.content,
-        summary: parsed.summary,
+        summary: [parsed.summary, parsed.topics.length ? `Topics: ${parsed.topics.join(", ")}` : ""]
+          .filter(Boolean)
+          .join(" · ")
+          .slice(0, 600),
         created_by: context.userId,
       })
       .select("id")
       .single();
     if (sourceError) throw new Error(sourceError.message);
 
-    const peopleList = ((people ?? []) as Person[]);
-    const clientList = ((clients ?? []) as Client[]);
+    // Semantic index of the document itself (plus any decisions and their reasoning).
+    const indexedChunks = await knowledge.indexSource(supabase, key, orgId, {
+      id: source.id as string,
+      title: data.title,
+      content: decisionNote ? `${data.content}\n\n${decisionNote}` : data.content,
+    });
 
-    const rows = parsed.commitments.slice(0, 25).map((c) => {
+    const peopleList = (people ?? []) as Person[];
+    const clientList = (clients ?? []) as Client[];
+
+    const candidates = parsed.commitments.slice(0, 25);
+    const candidateTexts = candidates.map(
+      (c) => `${c.owner_name} promised ${c.counterparty || "the team"}: ${c.promise}. ${c.quote ?? ""}`.trim(),
+    );
+
+    const { embedTexts } = await import("./ai-gateway.server");
+    const candidateVectors = candidateTexts.length > 0 ? await embedTexts(key, candidateTexts) : [];
+
+    const kept: { index: number; vector: number[] }[] = [];
+    let duplicates = 0;
+    for (let i = 0; i < candidates.length; i++) {
+      const vector = candidateVectors[i] ?? [];
+      const dup = vector.length ? await knowledge.findDuplicateCommitment(supabase, orgId, vector) : null;
+      if (dup) {
+        duplicates += 1;
+        continue;
+      }
+      kept.push({ index: i, vector });
+    }
+
+    const rows = kept.map(({ index }) => {
+      const c = candidates[index]!;
       const person = peopleList.find((p) => p.name.toLowerCase() === c.owner_name.trim().toLowerCase());
       const client = clientList.find((cl) => cl.name.toLowerCase() === (c.client_name ?? "").trim().toLowerCase());
       const days = Number.isFinite(c.due_in_days) ? Math.max(-365, Math.min(365, Math.round(c.due_in_days))) : 3;
@@ -356,12 +402,54 @@ export const ingestSource = createServerFn({ method: "POST" })
       };
     });
 
+    let inserted: { id: string; promise: string }[] = [];
     if (rows.length > 0) {
-      const { error: insertError } = await supabase.from("commitments").insert(rows);
+      const { data: insertedRows, error: insertError } = await supabase
+        .from("commitments")
+        .insert(rows)
+        .select("id,promise");
       if (insertError) throw new Error(insertError.message);
+      inserted = (insertedRows ?? []) as { id: string; promise: string }[];
+
+      // Index the new promises so future captures can be matched against them.
+      await knowledge.indexCommitments(
+        supabase,
+        key,
+        orgId,
+        inserted.map((row, i) => ({ id: row.id, text: candidateTexts[kept[i]!.index] ?? row.promise })),
+        kept.map((k) => k.vector),
+      );
+
+      // Link promise chains: "I'll review it once Devon sends the draft".
+      for (let i = 0; i < inserted.length; i++) {
+        const hint = candidates[kept[i]!.index]?.depends_on_promise?.trim();
+        if (!hint) continue;
+        let bestId: string | null = null;
+        let bestScore = 0;
+        for (let j = 0; j < inserted.length; j++) {
+          if (i === j) continue;
+          const score = knowledge.cosine(kept[i]!.vector, kept[j]!.vector);
+          const textual = (candidates[kept[j]!.index]?.promise ?? "").toLowerCase();
+          const overlap = textual && hint.toLowerCase().includes(textual.slice(0, 20)) ? 0.2 : 0;
+          if (score + overlap > bestScore) {
+            bestScore = score + overlap;
+            bestId = inserted[j]!.id;
+          }
+        }
+        if (bestId && bestScore >= 0.6) {
+          await supabase.from("commitments").update({ depends_on_id: bestId }).eq("id", inserted[i]!.id);
+        }
+      }
     }
 
-    return { sourceId: source.id as string, extracted: rows.length, summary: parsed.summary };
+    return {
+      sourceId: source.id as string,
+      extracted: rows.length,
+      duplicates,
+      indexedChunks,
+      decisions: parsed.decisions.length,
+      summary: parsed.summary,
+    };
   });
 
 export const setCommitmentStatus = createServerFn({ method: "POST" })
@@ -449,26 +537,91 @@ export const generateBriefing = createServerFn({ method: "POST" })
     return { briefing: text.trim() };
   });
 
+export const reindexKnowledge = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabase = context.supabase as unknown as SupabaseLike;
+    const orgId = await currentOrg(supabase);
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI is not configured for this project.");
+    const knowledge = await import("./knowledge.server");
+    return await knowledge.reindexWorkspace(supabase, key, orgId);
+  });
+
 export const askKnowledge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ question: z.string().min(3).max(500) }).parse(input))
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as unknown as SupabaseLike;
     const orgId = await currentOrg(supabase);
-    const [{ data: sources }, { data: commitments }] = await Promise.all([
-      supabase.from("sources").select("title,channel,content,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(40),
-      supabase.from("commitments").select("*").eq("org_id", orgId).limit(80),
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI is not configured for this project.");
+
+    const knowledge = await import("./knowledge.server");
+    const { createLovableResponsesProvider, OMNIFLOW_REASONING_MODEL, REASONING_OPTIONS } = await import(
+      "./ai-gateway.server"
+    );
+    const { streamText } = await import("ai");
+
+    // Make sure everything recorded so far has a vector before searching.
+    const { count } = await supabase
+      .from("knowledge_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", orgId);
+    if (!count) await knowledge.reindexWorkspace(supabase, key, orgId);
+
+    const queryVector = await knowledge.embedQuery(key, data.question);
+    const [passages, promiseMatches] = await Promise.all([
+      knowledge.searchChunks(supabase, orgId, queryVector, "source", 10),
+      knowledge.searchChunks(supabase, orgId, queryVector, "commitment", 6),
     ]);
 
-    const corpus = ((sources ?? []) as Source[])
-      .map((s) => `[${s.channel}] ${s.title} (${new Date(s.created_at).toDateString()})\n${s.content}`)
+    const sourceIds = Array.from(new Set(passages.map((p) => p.source_id).filter(Boolean))) as string[];
+    const { data: sourceRows } = sourceIds.length
+      ? await supabase.from("sources").select("id,title,channel,created_at").in("id", sourceIds)
+      : { data: [] };
+    const sourceById = new Map(
+      ((sourceRows ?? []) as { id: string; title: string; channel: string; created_at: string }[]).map((s) => [s.id, s]),
+    );
+
+    const context_ = passages
+      .map((p, i) => {
+        const s = p.source_id ? sourceById.get(p.source_id) : undefined;
+        const label = s ? `${s.title} [${s.channel}, ${new Date(s.created_at).toDateString()}]` : (p.heading ?? "Note");
+        return `[${i + 1}] ${label} (relevance ${(p.similarity * 100).toFixed(0)}%)\n${p.content}`;
+      })
       .join("\n\n---\n\n");
 
-    const answer = await runPrompt(
-      `ORGANISATIONAL RECORD:\n${corpus}\n\nTRACKED COMMITMENTS:\n${commitmentLines((commitments ?? []) as Commitment[])}\n\nQUESTION: ${data.question}`,
-      "You answer questions strictly from the organisation's own recorded messages, notes and commitments. Explain the why behind decisions and cite the note title you used. If the record does not contain the answer, say so plainly. Maximum 130 words.",
-    );
-    return { answer: answer.trim() };
+    const promiseContext = promiseMatches
+      .map((m) => `- ${m.content} (relevance ${(m.similarity * 100).toFixed(0)}%)`)
+      .join("\n");
+
+    if (!context_ && !promiseContext) {
+      return { answer: "There is nothing recorded yet, so the memory has no answer to give.", citations: [] };
+    }
+
+    const result = streamText({
+      model: (createLovableResponsesProvider(key)).responses(OMNIFLOW_REASONING_MODEL),
+      system:
+        "You answer strictly from the organisation's own retrieved passages and tracked promises. Explain the reasoning behind decisions, quote sparingly, and cite the passage numbers you used like [2]. If the retrieved material does not contain the answer, say so plainly instead of guessing. Maximum 150 words.",
+      prompt: `RETRIEVED PASSAGES:\n${context_ || "none"}\n\nRELATED TRACKED PROMISES:\n${promiseContext || "none"}\n\nQUESTION: ${data.question}`,
+      providerOptions: REASONING_OPTIONS as any,
+    });
+
+    const answer = await result.text;
+
+    const citations = passages.slice(0, 5).map((p, i) => {
+      const s = p.source_id ? sourceById.get(p.source_id) : undefined;
+      return {
+        index: i + 1,
+        title: s?.title ?? p.heading ?? "Note",
+        channel: s?.channel ?? "note",
+        similarity: Math.round(p.similarity * 100),
+        excerpt: p.content.slice(0, 220),
+      };
+    });
+
+    return { answer: answer.trim(), citations };
   });
 
 export const analyseExpectationGaps = createServerFn({ method: "POST" })
