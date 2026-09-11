@@ -52,9 +52,10 @@ export async function indexCommitments(
   key: string,
   orgId: string,
   commitments: { id: string; text: string }[],
+  precomputed?: number[][],
 ): Promise<number[][]> {
   if (commitments.length === 0) return [];
-  const vectors = await embedTexts(key, commitments.map((c) => c.text));
+  const vectors = precomputed ?? (await embedTexts(key, commitments.map((c) => c.text)));
   const rows = commitments.map((c, i) => ({
     org_id: orgId,
     kind: "commitment",
