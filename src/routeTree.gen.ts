@@ -23,6 +23,7 @@ import { Route as AuthenticatedPeopleRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedPipelineRouteImport } from './routes/_authenticated/pipeline'
 import { Route as AuthenticatedSalesRouteImport } from './routes/_authenticated/sales'
 import { Route as AuthenticatedSupportRouteImport } from './routes/_authenticated/support'
+import { Route as ApiPublicAgentsRunRouteImport } from './routes/api/public/agents/run'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -96,6 +97,11 @@ const AuthenticatedSupportRoute = AuthenticatedSupportRouteImport.update({
   path: '/support',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicAgentsRunRoute = ApiPublicAgentsRunRouteImport.update({
+  id: '/api/public/agents/run',
+  path: '/api/public/agents/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/pipeline': typeof AuthenticatedPipelineRoute
   '/sales': typeof AuthenticatedSalesRoute
   '/support': typeof AuthenticatedSupportRoute
+  '/api/public/agents/run': typeof ApiPublicAgentsRunRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/pipeline': typeof AuthenticatedPipelineRoute
   '/sales': typeof AuthenticatedSalesRoute
   '/support': typeof AuthenticatedSupportRoute
+  '/api/public/agents/run': typeof ApiPublicAgentsRunRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/_authenticated/pipeline': typeof AuthenticatedPipelineRoute
   '/_authenticated/sales': typeof AuthenticatedSalesRoute
   '/_authenticated/support': typeof AuthenticatedSupportRoute
+  '/api/public/agents/run': typeof ApiPublicAgentsRunRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/pipeline'
     | '/sales'
     | '/support'
+    | '/api/public/agents/run'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/pipeline'
     | '/sales'
     | '/support'
+    | '/api/public/agents/run'
   id:
     | '__root__'
     | '/'
@@ -191,12 +202,14 @@ export interface FileRouteTypes {
     | '/_authenticated/pipeline'
     | '/_authenticated/sales'
     | '/_authenticated/support'
+    | '/api/public/agents/run'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicAgentsRunRoute: typeof ApiPublicAgentsRunRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -299,6 +312,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSupportRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/agents/run': {
+      id: '/api/public/agents/run'
+      path: '/api/public/agents/run'
+      fullPath: '/api/public/agents/run'
+      preLoaderRoute: typeof ApiPublicAgentsRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -337,6 +357,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicAgentsRunRoute: ApiPublicAgentsRunRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -14,6 +14,151 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_decisions: {
+        Row: {
+          action: string
+          after: Json | null
+          agent: string
+          before: Json | null
+          created_at: string
+          created_record: boolean
+          id: string
+          org_id: string
+          rationale: string | null
+          run_id: string | null
+          target_id: string
+          target_label: string | null
+          target_table: string
+          undone_at: string | null
+        }
+        Insert: {
+          action: string
+          after?: Json | null
+          agent: string
+          before?: Json | null
+          created_at?: string
+          created_record?: boolean
+          id?: string
+          org_id: string
+          rationale?: string | null
+          run_id?: string | null
+          target_id: string
+          target_label?: string | null
+          target_table: string
+          undone_at?: string | null
+        }
+        Update: {
+          action?: string
+          after?: Json | null
+          agent?: string
+          before?: Json | null
+          created_at?: string
+          created_record?: boolean
+          id?: string
+          org_id?: string
+          rationale?: string | null
+          run_id?: string | null
+          target_id?: string
+          target_label?: string | null
+          target_table?: string
+          undone_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_decisions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_decisions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_runs: {
+        Row: {
+          decisions: number
+          error: string | null
+          finished_at: string | null
+          id: string
+          org_id: string
+          started_at: string
+          status: string
+          summary: string | null
+          trigger: string
+        }
+        Insert: {
+          decisions?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          org_id: string
+          started_at?: string
+          status?: string
+          summary?: string | null
+          trigger?: string
+        }
+        Update: {
+          decisions?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          org_id?: string
+          started_at?: string
+          status?: string
+          summary?: string | null
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_settings: {
+        Row: {
+          last_run_at: string | null
+          lease_until: string | null
+          org_id: string
+          pause_reason: string | null
+          paused: boolean
+          updated_at: string
+        }
+        Insert: {
+          last_run_at?: string | null
+          lease_until?: string | null
+          org_id: string
+          pause_reason?: string | null
+          paused?: boolean
+          updated_at?: string
+        }
+        Update: {
+          last_run_at?: string | null
+          lease_until?: string | null
+          org_id?: string
+          pause_reason?: string | null
+          paused?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calls: {
         Row: {
           action_items: Json
@@ -798,6 +943,21 @@ export type Database = {
           },
         ]
       }
+      scheduler_tokens: {
+        Row: {
+          id: number
+          token: string
+        }
+        Insert: {
+          id: number
+          token: string
+        }
+        Update: {
+          id?: number
+          token?: string
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           channel: string
@@ -907,6 +1067,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acquire_agent_lease: {
+        Args: { v_org: string; v_seconds?: number }
+        Returns: boolean
+      }
       bootstrap_workspace: { Args: never; Returns: string }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
       match_knowledge_chunks: {
