@@ -58,7 +58,11 @@ function CommitmentsPage() {
   const ingest = useMutation({
     mutationFn: () => ingestFn({ data: { title: title.trim() || "Untitled capture", channel, content } }),
     onSuccess: (result) => {
-      toast.success(`${result.extracted} promise${result.extracted === 1 ? "" : "s"} extracted`);
+      toast.success(
+        `${result.extracted} promise${result.extracted === 1 ? "" : "s"} extracted` +
+          (result.duplicates ? ` · ${result.duplicates} already tracked` : "") +
+          (result.decisions ? ` · ${result.decisions} decision${result.decisions === 1 ? "" : "s"} remembered` : ""),
+      );
       setContent("");
       setTitle("");
       refresh();
