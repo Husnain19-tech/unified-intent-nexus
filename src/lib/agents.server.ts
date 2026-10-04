@@ -179,11 +179,11 @@ async function salesAgent(ctx: Ctx) {
     if (!lead || d.action === "no_change") continue;
     const stages = ["new", "contacted", "qualified", "proposal", "won", "lost"];
     const patch: Record<string, unknown> = { last_touch_at: new Date().toISOString() };
-    if (stages.includes(d.stage)) patch.stage = d.stage;
-    if (["cold", "neutral", "warm", "hot"].includes(d.sentiment)) patch.sentiment = d.sentiment;
+    if (stages.includes(d.stage)) patch["stage"] = d.stage;
+    if (["cold", "neutral", "warm", "hot"].includes(d.sentiment)) patch["sentiment"] = d.sentiment;
     n += await updateTracked(ctx, "sales", "leads", lead, patch, d.action, lead.company, d.rationale);
     if (d.note) {
-      await ctx.db.from("lead_touches").insert({ org_id: ctx.orgId, lead_id: lead.id, channel: "ai", note: `AI agent: ${d.note}`.slice(0, 500), sentiment: (patch.sentiment as string) ?? lead.sentiment });
+      await ctx.db.from("lead_touches").insert({ org_id: ctx.orgId, lead_id: lead.id, channel: "ai", note: `AI agent: ${d.note}`.slice(0, 500), sentiment: (patch["sentiment"] as string) ?? lead.sentiment });
     }
     if (d.followup && d.action !== "mark_lost") {
       n += await createCommitment(ctx, "sales", { owner_name: "Sales agent", counterparty: lead.contact_name ?? lead.company, promise: d.followup, days: d.followup_days }, d.rationale);
@@ -265,7 +265,7 @@ async function pipelineAgent(ctx: Ctx) {
       probability: clamp(d.probability, 0, 100),
       health_note: d.note.slice(0, 400),
     };
-    if (stages.includes(d.stage)) patch.stage = d.stage;
+    if (stages.includes(d.stage)) patch["stage"] = d.stage;
     n += await updateTracked(ctx, "pipeline", "deals", deal, patch, d.action, deal.name, d.rationale);
   }
   return n;
