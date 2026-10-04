@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCallsRouteImport } from './routes/_authenticated/calls'
+import { Route as AuthenticatedCeoRouteImport } from './routes/_authenticated/ceo'
 import { Route as AuthenticatedCommandRouteImport } from './routes/_authenticated/command'
 import { Route as AuthenticatedCommitmentsRouteImport } from './routes/_authenticated/commitments'
 import { Route as AuthenticatedDependenciesRouteImport } from './routes/_authenticated/dependencies'
@@ -42,6 +43,11 @@ const AuthRoute = AuthRouteImport.update({
 const AuthenticatedCallsRoute = AuthenticatedCallsRouteImport.update({
   id: '/calls',
   path: '/calls',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCeoRoute = AuthenticatedCeoRouteImport.update({
+  id: '/ceo',
+  path: '/ceo',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCommandRoute = AuthenticatedCommandRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/calls': typeof AuthenticatedCallsRoute
+  '/ceo': typeof AuthenticatedCeoRoute
   '/command': typeof AuthenticatedCommandRoute
   '/commitments': typeof AuthenticatedCommitmentsRoute
   '/dependencies': typeof AuthenticatedDependenciesRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/calls': typeof AuthenticatedCallsRoute
+  '/ceo': typeof AuthenticatedCeoRoute
   '/command': typeof AuthenticatedCommandRoute
   '/commitments': typeof AuthenticatedCommitmentsRoute
   '/dependencies': typeof AuthenticatedDependenciesRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/calls': typeof AuthenticatedCallsRoute
+  '/_authenticated/ceo': typeof AuthenticatedCeoRoute
   '/_authenticated/command': typeof AuthenticatedCommandRoute
   '/_authenticated/commitments': typeof AuthenticatedCommitmentsRoute
   '/_authenticated/dependencies': typeof AuthenticatedDependenciesRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/calls'
+    | '/ceo'
     | '/command'
     | '/commitments'
     | '/dependencies'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/calls'
+    | '/ceo'
     | '/command'
     | '/commitments'
     | '/dependencies'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/calls'
+    | '/_authenticated/ceo'
     | '/_authenticated/command'
     | '/_authenticated/commitments'
     | '/_authenticated/dependencies'
@@ -240,6 +252,13 @@ declare module '@tanstack/react-router' {
       path: '/calls'
       fullPath: '/calls'
       preLoaderRoute: typeof AuthenticatedCallsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/ceo': {
+      id: '/_authenticated/ceo'
+      path: '/ceo'
+      fullPath: '/ceo'
+      preLoaderRoute: typeof AuthenticatedCeoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/command': {
@@ -324,6 +343,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCallsRoute: typeof AuthenticatedCallsRoute
+  AuthenticatedCeoRoute: typeof AuthenticatedCeoRoute
   AuthenticatedCommandRoute: typeof AuthenticatedCommandRoute
   AuthenticatedCommitmentsRoute: typeof AuthenticatedCommitmentsRoute
   AuthenticatedDependenciesRoute: typeof AuthenticatedDependenciesRoute
@@ -338,6 +358,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCallsRoute: AuthenticatedCallsRoute,
+  AuthenticatedCeoRoute: AuthenticatedCeoRoute,
   AuthenticatedCommandRoute: AuthenticatedCommandRoute,
   AuthenticatedCommitmentsRoute: AuthenticatedCommitmentsRoute,
   AuthenticatedDependenciesRoute: AuthenticatedDependenciesRoute,

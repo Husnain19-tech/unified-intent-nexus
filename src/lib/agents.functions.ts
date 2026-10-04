@@ -8,8 +8,8 @@ export type AgentDecision = {
   action: string;
   target_table: string;
   target_label: string | null;
-  before: Record<string, unknown> | null;
-  after: Record<string, unknown> | null;
+  before: Record<string, string | number | boolean | null | string[]> | null;
+  after: Record<string, string | number | boolean | null | string[]> | null;
   created_record: boolean;
   rationale: string | null;
   undone_at: string | null;

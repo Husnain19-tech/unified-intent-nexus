@@ -15,6 +15,7 @@ import {
   Target,
   TrendingUp,
   Users,
+  Bot,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -22,6 +23,7 @@ const NAV_GROUPS = [
     label: "Intelligence",
     items: [
       { to: "/command", label: "Command Center", icon: Activity },
+      { to: "/ceo", label: "AI CEO", icon: Bot },
       { to: "/knowledge", label: "Knowledge Mesh", icon: Network },
       { to: "/dependencies", label: "Dependency Monitor", icon: GitBranch },
     ],
