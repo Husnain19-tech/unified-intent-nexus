@@ -1,5 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { getAgentConsole } from "@/lib/agents.functions";
+import { Bot } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { useWorkspace } from "@/lib/use-workspace";
 import { generateBriefing, type Commitment } from "@/lib/omniflow.functions";
@@ -38,6 +40,15 @@ function Metric({ label, value, tone }: { label: string; value: string | number;
 function CommandCenter() {
   const { data, isLoading } = useWorkspace();
   const briefingFn = useServerFn(generateBriefing);
+  const consoleFn = useServerFn(getAgentConsole);
+  const { data: agents } = useQuery({
+    queryKey: ["agent-console"],
+    queryFn: () => consoleFn(),
+    refetchInterval: 60000,
+  });
+  const agentToday = (agents?.decisions ?? []).filter(
+    (d) => !d.undone_at && Date.now() - new Date(d.created_at).getTime() < 86400000,
+  ).length;
   const briefing = useMutation({
     mutationFn: () => briefingFn(),
     onError: (e: Error) => toast.error(e.message),
@@ -110,6 +121,22 @@ function CommandCenter() {
               tone={fragileDeps ? "text-warn" : "text-success"}
             />
           </div>
+
+          <Link to="/ceo" className="panel flex flex-wrap items-center justify-between gap-3 p-4 hover:border-primary/50">
+            <div className="flex items-center gap-3">
+              <Bot className="h-5 w-5 text-primary" />
+              <div>
+                <div className="font-semibold">
+                  AI CEO {agents?.paused ? "· paused" : "· acting hourly"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <span className="num">{agentToday}</span> autonomous decisions in the last 24h · last run{" "}
+                  {agents?.lastRunAt ? new Date(agents.lastRunAt).toLocaleTimeString() : "never"}
+                </div>
+              </div>
+            </div>
+            <span className="text-xs text-primary">Review & undo →</span>
+          </Link>
 
           <div className="panel p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
