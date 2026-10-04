@@ -195,9 +195,9 @@ function CeoPage() {
                         <div className="mt-1.5 font-medium">{d.target_label}</div>
                         {changeText(d) && <div className="num mt-1 text-xs text-primary/90">{changeText(d)}</div>}
                         {d.rationale && <p className="mt-1 text-sm text-muted-foreground">{d.rationale}</p>}
-                        {typeof d.after?.ai_reply === "string" && d.after.ai_reply && (
+                        {typeof d.after?.["ai_reply"] === "string" && d.after["ai_reply"] && (
                           <p className="mt-2 border-l-2 border-border pl-3 text-xs italic text-muted-foreground line-clamp-3">
-                            {d.after.ai_reply}
+                            {d.after["ai_reply"]}
                           </p>
                         )}
                       </div>
