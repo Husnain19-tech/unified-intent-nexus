@@ -157,6 +157,20 @@ async function createCommitment(
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(n) || 0)));
 
+async function nlp() {
+  return await import("./nlp.server");
+}
+
+async function guard<T>(fn: () => Promise<T>): Promise<T> {
+  const { AiBlocked } = await nlp();
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof AiBlocked && (error.status === 402 || error.status === 403)) throw new AgentPause(error.message);
+    throw error;
+  }
+}
+
 async function salesAgent(ctx: Ctx) {
   const cutoff = new Date(Date.now() - 3 * 86400000).toISOString();
   const { data } = await ctx.db
@@ -165,15 +179,35 @@ async function salesAgent(ctx: Ctx) {
     .eq("org_id", ctx.orgId)
     .not("stage", "in", "(won,lost)")
     .or(`last_touch_at.is.null,last_touch_at.lt.${cutoff}`)
-    .limit(BATCH);
+    .limit(4);
   const leads = (data ?? []) as any[];
   if (!leads.length) return 0;
+  const { data: touchRows } = await ctx.db
+    .from("lead_touches")
+    .select("*")
+    .eq("org_id", ctx.orgId)
+    .in("lead_id", leads.map((l) => l.id))
+    .order("created_at", { ascending: false });
+  const touchesFor = (id: string) => ((touchRows ?? []) as any[]).filter((t) => t.lead_id === id);
+
   const decisions = await decide(
     ctx.key,
-    "You are the autonomous sales agent. For each lead that has gone quiet decide: action is advance, nurture, mark_lost or no_change. stage is the new stage, one of new, contacted, qualified, proposal, won, lost. sentiment is cold, neutral, warm or hot. followup is the next outreach step as a short imperative (or empty), followup_days is when to do it. note is a one-line log of what you decided.",
-    leads.map((l) => ({ item_id: l.id, company: l.company, contact: l.contact_name, stage: l.stage, value: l.value, sentiment: l.sentiment, notes: l.notes, last_touch_at: l.last_touch_at })),
+    "You are the autonomous sales agent. For each quiet lead, read its notes and full touch history and decide: action is advance, nurture, mark_lost or no_change. stage is the new stage (new, contacted, qualified, proposal, won, lost) — only move it on real evidence in the history. sentiment is cold, neutral, warm or hot. Only mark_lost after repeated unanswered touches or an explicit no.",
+    leads.map((l) => ({
+      item_id: l.id,
+      company: l.company,
+      contact: l.contact_name,
+      stage: l.stage,
+      value: l.value,
+      sentiment: l.sentiment,
+      notes: l.notes,
+      last_touch_at: l.last_touch_at,
+      history: touchesFor(l.id).slice(0, 8).map((t) => `${String(t.created_at).slice(0, 10)} ${t.channel} ${t.sentiment}: ${t.note ?? ""}`),
+    })),
   );
+
   let n = 0;
+  const { writeOutreach } = await nlp();
   for (const d of decisions) {
     const lead = leads.find((l) => l.id === d.item_id);
     if (!lead || d.action === "no_change") continue;
@@ -181,60 +215,99 @@ async function salesAgent(ctx: Ctx) {
     const patch: Record<string, unknown> = { last_touch_at: new Date().toISOString() };
     if (stages.includes(d.stage)) patch["stage"] = d.stage;
     if (["cold", "neutral", "warm", "hot"].includes(d.sentiment)) patch["sentiment"] = d.sentiment;
-    n += await updateTracked(ctx, "sales", "leads", lead, patch, d.action, lead.company, d.rationale);
-    if (d.note) {
-      await ctx.db.from("lead_touches").insert({ org_id: ctx.orgId, lead_id: lead.id, channel: "ai", note: `AI agent: ${d.note}`.slice(0, 500), sentiment: (patch["sentiment"] as string) ?? lead.sentiment });
+
+    if (d.action === "mark_lost") {
+      n += await updateTracked(ctx, "sales", "leads", lead, patch, d.action, lead.company, d.rationale);
+      continue;
     }
-    if (d.followup && d.action !== "mark_lost") {
-      n += await createCommitment(ctx, "sales", { owner_name: "Sales agent", counterparty: lead.contact_name ?? lead.company, promise: d.followup, days: d.followup_days }, d.rationale);
+
+    const channel = (["email", "call", "linkedin"].includes(lead.channel) ? lead.channel : "email") as "email" | "call" | "linkedin";
+    const outreach = await guard(() => writeOutreach(ctx.db, ctx.orgId, ctx.key, lead, touchesFor(lead.id), channel, "the account team"));
+    patch["sentiment"] = outreach.sentiment;
+    n += await updateTracked(ctx, "sales", "leads", lead, patch, d.action, lead.company, `${d.rationale} Angle: ${outreach.angle}`);
+
+    const body = [outreach.subject ? `Subject: ${outreach.subject}` : "", outreach.message].filter(Boolean).join("\n\n");
+    const { data: touch } = await ctx.db
+      .from("lead_touches")
+      .insert({ org_id: ctx.orgId, lead_id: lead.id, channel, note: `AI draft (${outreach.angle}):\n${body}`.slice(0, 2000), sentiment: outreach.sentiment })
+      .select("id")
+      .single();
+    if (touch) {
+      await record(ctx, {
+        agent: "sales",
+        action: "draft_outreach",
+        table: "lead_touches",
+        id: touch.id,
+        label: `${channel} to ${lead.contact_name ?? lead.company}`,
+        after: { ai_reply: body, buyer_state: outreach.buyer_state },
+        created: true,
+        rationale: outreach.buyer_state,
+      });
+      n += 1;
     }
+    n += await createCommitment(
+      ctx,
+      "sales",
+      { owner_name: "Sales agent", counterparty: lead.contact_name ?? lead.company, promise: `Follow up with ${lead.company} if no reply — ${outreach.followup_reason}`, days: outreach.followup_days },
+      outreach.followup_reason,
+    );
   }
   return n;
 }
 
 async function voipAgent(ctx: Ctx) {
-  const { data } = await ctx.db.from("calls").select("*").eq("org_id", ctx.orgId).is("summary", null).limit(BATCH);
+  const { data } = await ctx.db.from("calls").select("*").eq("org_id", ctx.orgId).is("summary", null).limit(3);
   const calls = (data ?? []) as any[];
-  if (!calls.length) return 0;
-  const decisions = await decide(
-    ctx.key,
-    "You are the autonomous call-intelligence agent. For each unanalysed call: action is analyse. note is a two sentence summary. sentiment is positive, neutral, mixed or negative. reply is a comma separated list of objections (or empty). score is the percentage of talking done by our side (0-100). items are up to three concrete follow-up actions as short imperatives. followup_days is when those follow-ups are due.",
-    calls.map((c) => ({ item_id: c.id, participant: c.participant, direction: c.direction, transcript: String(c.transcript).slice(0, 6000) })),
-  );
   let n = 0;
-  for (const d of decisions) {
-    const call = calls.find((c) => c.id === d.item_id);
-    if (!call) continue;
-    const items = d.items.slice(0, 3).map((s) => s.slice(0, 200));
-    n += await updateTracked(ctx, "voip", "calls", call, {
-      summary: d.note.slice(0, 1000),
-      sentiment: ["positive", "neutral", "mixed", "negative"].includes(d.sentiment) ? d.sentiment : "neutral",
-      objections: d.reply.slice(0, 500),
-      talk_ratio: clamp(d.score, 0, 100),
-      action_items: items,
-    }, "analyse", `Call with ${call.participant}`, d.rationale);
-    for (const item of items) {
-      n += await createCommitment(ctx, "voip", { owner_name: "Call agent", counterparty: call.participant, promise: item, days: d.followup_days, client_id: call.client_id }, `Follow-up from call with ${call.participant}.`);
+  const { analyseTranscript } = await nlp();
+  for (const call of calls) {
+    const a = await guard(() => analyseTranscript(ctx.db, ctx.orgId, ctx.key, call));
+    const summary = [
+      a.summary,
+      a.buying_signals.length ? `Buying signals: ${a.buying_signals.join("; ")}.` : "",
+      a.risks.length ? `Risks: ${a.risks.join("; ")}.` : "",
+      a.coaching_tip ? `Coaching: ${a.coaching_tip}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    n += await updateTracked(
+      ctx,
+      "voip",
+      "calls",
+      call,
+      {
+        summary: summary.slice(0, 1500),
+        sentiment: a.sentiment,
+        objections: a.objections.join(", ").slice(0, 500),
+        talk_ratio: a.talk_ratio,
+        action_items: a.action_items.map((x) => `${x.owner}: ${x.task}`.slice(0, 200)),
+      },
+      "analyse",
+      `Call with ${call.participant}`,
+      `${a.sentiment_shift}. ${a.coaching_tip}`.trim(),
+    );
+    for (const item of a.action_items.slice(0, 3)) {
+      n += await createCommitment(
+        ctx,
+        "voip",
+        { owner_name: item.owner || "Call agent", counterparty: call.participant, promise: item.task, days: item.due_in_days, client_id: call.client_id },
+        `Agreed on the call with ${call.participant}.`,
+      );
     }
   }
   return n;
 }
 
 async function supportAgent(ctx: Ctx) {
-  const { data } = await ctx.db.from("tickets").select("*").eq("org_id", ctx.orgId).eq("status", "open").is("ai_reply", null).limit(BATCH);
+  const { data } = await ctx.db.from("tickets").select("*").eq("org_id", ctx.orgId).eq("status", "open").is("ai_reply", null).limit(4);
   const tickets = (data ?? []) as any[];
-  if (!tickets.length) return 0;
-  const decisions = await decide(
-    ctx.key,
-    "You are the autonomous support agent. For each open ticket: action is resolve when a clear, safe answer can be given, escalate when it needs a human (billing disputes, outages, legal, angry high-value customers), or wait when more information is needed from the customer. reply is the full customer-facing reply (under 120 words). note is a one-line internal resolution note.",
-    tickets.map((t) => ({ item_id: t.id, requester: t.requester, priority: t.priority, subject: t.subject, body: t.body })),
-  );
   let n = 0;
-  for (const d of decisions) {
-    const t = tickets.find((x) => x.id === d.item_id);
-    if (!t) continue;
-    const status = d.action === "resolve" ? "resolved" : d.action === "escalate" ? "escalated" : "open";
-    n += await updateTracked(ctx, "support", "tickets", t, { ai_reply: d.reply.slice(0, 2000) || null, status, resolution: d.note.slice(0, 500) || null }, d.action, t.subject, d.rationale);
+  const { writeSupportReply } = await nlp();
+  for (const t of tickets) {
+    const r = await guard(() => writeSupportReply(ctx.db, ctx.orgId, ctx.key, t));
+    const status = r.decision === "resolve" ? "resolved" : r.decision === "escalate" ? "escalated" : "open";
+    const note = `${r.internal_note} (intent: ${r.intent}; mood: ${r.customer_emotion}; confidence ${r.confidence}%${r.sources.length ? `; sources: ${r.sources.join(", ")}` : ""})`;
+    n += await updateTracked(ctx, "support", "tickets", t, { ai_reply: r.reply.slice(0, 2500), status, resolution: note.slice(0, 500) }, r.decision, t.subject, note);
   }
   return n;
 }
@@ -336,7 +409,7 @@ export async function undoDecision(db: Db, orgId: string, id: string) {
   if (error) throw new Error(error.message);
   if (!d) throw new Error("Decision not found.");
   if (d.undone_at) return { ok: true };
-  const allowed = ["leads", "calls", "tickets", "deals", "commitments"];
+  const allowed = ["leads", "lead_touches", "calls", "tickets", "deals", "commitments"];
   if (!allowed.includes(d.target_table)) throw new Error("This decision cannot be undone.");
   if (d.created_record) {
     const { error: e } = await db.from(d.target_table).delete().eq("id", d.target_id).eq("org_id", orgId);
