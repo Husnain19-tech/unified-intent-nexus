@@ -1,5 +1,3 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 
 /** Claude provider (Anthropic Messages API) used for every chat/reasoning call. */
