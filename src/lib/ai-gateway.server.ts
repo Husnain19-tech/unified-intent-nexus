@@ -1,5 +1,15 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+
+/** Claude provider (Anthropic Messages API) used for every chat/reasoning call. */
+export function createLovableClaudeProvider(apiKey: string) {
+  return createAnthropic({
+    baseURL: "https://ai.gateway.lovable.dev/v1",
+    apiKey,
+    headers: { "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+  });
+}
+
+export const OMNIFLOW_CLAUDE_MODEL = "anthropic/claude-sonnet-5";
 
 export function createLovableAiGatewayProvider(apiKey: string) {
   return createOpenAICompatible({

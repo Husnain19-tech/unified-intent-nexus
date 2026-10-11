@@ -15,24 +15,16 @@ function statusOf(error: unknown): number | undefined {
 
 /** One structured, reasoning-backed call on the Lovable AI Gateway. */
 async function structured<T extends z.ZodTypeAny>(key: string, system: string, prompt: string, schema: T): Promise<z.infer<T>> {
-  const { createLovableResponsesProvider, OMNIFLOW_REASONING_MODEL } = await import("./ai-gateway.server");
+  const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
   const { streamText, Output, NoObjectGeneratedError } = await import("ai");
-  const provider = createLovableResponsesProvider(key);
+  const provider = createLovableClaudeProvider(key);
   try {
     const result = streamText({
-      model: provider.responses(OMNIFLOW_REASONING_MODEL),
+      model: provider(OMNIFLOW_CLAUDE_MODEL),
       system,
       prompt,
       output: Output.object({ schema }),
-      providerOptions: {
-        openai: {
-          forceReasoning: true,
-          reasoningEffort: "medium",
-          reasoningSummary: "auto",
-          store: false,
-          include: ["reasoning.encrypted_content"],
-        },
-      } as any,
+      maxOutputTokens: 16000,
     });
     return await result.output;
   } catch (error) {
