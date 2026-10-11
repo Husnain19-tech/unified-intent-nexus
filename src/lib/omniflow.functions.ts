@@ -255,12 +255,10 @@ export const ingestSource = createServerFn({ method: "POST" })
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) throw new Error("AI is not configured for this project.");
 
-    const { createLovableResponsesProvider, OMNIFLOW_REASONING_MODEL, REASONING_OPTIONS } = await import(
-      "./ai-gateway.server"
-    );
+    const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
     const knowledge = await import("./knowledge.server");
     const { streamText, Output, NoObjectGeneratedError } = await import("ai");
-    const responses = createLovableResponsesProvider(key);
+    const claude = createLovableClaudeProvider(key);
 
     const { data: people } = await supabase.from("people").select("id,name").eq("org_id", orgId);
     const { data: clients } = await supabase.from("clients").select("id,name").eq("org_id", orgId);
@@ -310,10 +308,10 @@ export const ingestSource = createServerFn({ method: "POST" })
     let parsed: z.infer<typeof schema>;
     try {
       const result = streamText({
-        model: responses.responses(OMNIFLOW_REASONING_MODEL),
+        model: claude(OMNIFLOW_CLAUDE_MODEL),
         output: Output.object({ schema }),
         prompt,
-        providerOptions: REASONING_OPTIONS as any,
+        maxOutputTokens: 16000,
       });
       parsed = await result.output;
     } catch (error) {
@@ -486,10 +484,10 @@ export const deleteCommitment = createServerFn({ method: "POST" })
 async function runPrompt(prompt: string, system: string) {
   const key = process.env["LOVABLE_API_KEY"];
   if (!key) throw new Error("AI is not configured for this project.");
-  const { createLovableAiGatewayProvider, OMNIFLOW_MODEL } = await import("./ai-gateway.server");
+  const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
   const { streamText } = await import("ai");
-  const gateway = createLovableAiGatewayProvider(key);
-  const result = streamText({ model: gateway(OMNIFLOW_MODEL), system, prompt });
+  const claude = createLovableClaudeProvider(key);
+  const result = streamText({ model: claude(OMNIFLOW_CLAUDE_MODEL), system, prompt, maxOutputTokens: 16000 });
   return await result.text;
 }
 
@@ -558,9 +556,7 @@ export const askKnowledge = createServerFn({ method: "POST" })
     if (!key) throw new Error("AI is not configured for this project.");
 
     const knowledge = await import("./knowledge.server");
-    const { createLovableResponsesProvider, OMNIFLOW_REASONING_MODEL, REASONING_OPTIONS } = await import(
-      "./ai-gateway.server"
-    );
+    const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
     const { streamText } = await import("ai");
 
     // Make sure everything recorded so far has a vector before searching.
@@ -601,7 +597,7 @@ export const askKnowledge = createServerFn({ method: "POST" })
     }
 
     const result = streamText({
-      model: (createLovableResponsesProvider(key)).responses(OMNIFLOW_REASONING_MODEL),
+      model: createLovableClaudeProvider(key)(OMNIFLOW_CLAUDE_MODEL),
       system:
         "You answer strictly from the organisation's own retrieved passages and tracked promises. Explain the reasoning behind decisions, quote sparingly, and cite the passage numbers you used like [2]. If the retrieved material does not contain the answer, say so plainly instead of guessing. Maximum 150 words.",
       prompt: `RETRIEVED PASSAGES:\n${context_ || "none"}\n\nRELATED TRACKED PROMISES:\n${promiseContext || "none"}\n\nQUESTION: ${data.question}`,
