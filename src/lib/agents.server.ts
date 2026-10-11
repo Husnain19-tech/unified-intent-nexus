@@ -44,10 +44,10 @@ async function decide(key: string, instructions: string, items: unknown[]): Prom
   const prompt = `Today is ${new Date().toDateString()}.\n${instructions}\n\nEvery decision must include every field. Use an empty string, 0 or an empty list for fields that do not apply. rationale is one short sentence a manager can read.\n\nITEMS:\n${JSON.stringify(items, null, 1)}`;
   try {
     const result = streamText({
-      model: provider.responses(OMNIFLOW_REASONING_MODEL),
+      model: provider(OMNIFLOW_CLAUDE_MODEL),
       output: Output.object({ schema: DecisionSchema }),
       prompt,
-      providerOptions: REASONING_OPTIONS as any,
+      maxOutputTokens: 16000,
     });
     return (await result.output).decisions;
   } catch (error) {
