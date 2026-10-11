@@ -601,7 +601,7 @@ export const askKnowledge = createServerFn({ method: "POST" })
       system:
         "You answer strictly from the organisation's own retrieved passages and tracked promises. Explain the reasoning behind decisions, quote sparingly, and cite the passage numbers you used like [2]. If the retrieved material does not contain the answer, say so plainly instead of guessing. Maximum 150 words.",
       prompt: `RETRIEVED PASSAGES:\n${context_ || "none"}\n\nRELATED TRACKED PROMISES:\n${promiseContext || "none"}\n\nQUESTION: ${data.question}`,
-      providerOptions: REASONING_OPTIONS as any,
+      maxOutputTokens: 16000,
     });
 
     const answer = await result.text;
