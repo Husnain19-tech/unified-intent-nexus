@@ -38,11 +38,9 @@ function statusOf(error: unknown): number | undefined {
 }
 
 async function decide(key: string, instructions: string, items: unknown[]): Promise<Decision[]> {
-  const { createLovableResponsesProvider, OMNIFLOW_REASONING_MODEL, REASONING_OPTIONS } = await import(
-    "./ai-gateway.server"
-  );
+  const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
   const { streamText, Output, NoObjectGeneratedError } = await import("ai");
-  const provider = createLovableResponsesProvider(key);
+  const provider = createLovableClaudeProvider(key);
   const prompt = `Today is ${new Date().toDateString()}.\n${instructions}\n\nEvery decision must include every field. Use an empty string, 0 or an empty list for fields that do not apply. rationale is one short sentence a manager can read.\n\nITEMS:\n${JSON.stringify(items, null, 1)}`;
   try {
     const result = streamText({
