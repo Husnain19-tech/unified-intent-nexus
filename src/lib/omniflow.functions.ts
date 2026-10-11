@@ -801,12 +801,17 @@ export const draftOutreach = createServerFn({ method: "POST" })
       .map((t) => `- ${new Date(t.created_at).toDateString()} via ${t.channel} (${t.sentiment}): ${t.note ?? ""}`)
       .join("\n");
 
-    const draft = await runPrompt(
-      `LEAD: ${l.company}\nContact: ${l.contact_name ?? "unknown"}\nStage: ${l.stage}\nDeal value: ${l.value}\nCurrent sentiment: ${l.sentiment}\nLast touch: ${l.last_touch_at ? new Date(l.last_touch_at).toDateString() : "never"}\nNotes: ${l.notes ?? "none"}\n\nTOUCH HISTORY:\n${history || "no touches yet"}\n\nCHANNEL TO WRITE FOR: ${data.channel}\nToday is ${new Date().toDateString()}.`,
-      "You are a disciplined sales orchestrator. Return exactly two parts, separated by a line containing only ---. Part one: the outreach message itself for the requested channel, personalised to this lead, under 120 words, no placeholders. Part two: one sentence recommending when to follow up next and why, based on the last touch and sentiment.",
-    );
-    const [message, timing] = draft.split(/\n?---\n?/);
-    return { message: (message ?? draft).trim(), timing: (timing ?? "").trim() };
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI is not configured for this project.");
+    const { writeOutreach } = await import("./nlp.server");
+    const out = await writeOutreach(supabase as any, orgId, key, l, (touches ?? []) as LeadTouch[], data.channel, "the account team");
+    const message = [out.subject ? `Subject: ${out.subject}` : "", out.message].filter(Boolean).join("\n\n");
+    return {
+      message,
+      timing: `Follow up in ${out.followup_days} day${out.followup_days === 1 ? "" : "s"} if no reply — ${out.followup_reason}`,
+      angle: out.angle,
+      buyerState: out.buyer_state,
+    };
   });
 
 /* ---------------- VoIP Intelligence ---------------- */
@@ -830,37 +835,15 @@ export const analyseCall = createServerFn({ method: "POST" })
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) throw new Error("AI is not configured for this project.");
 
-    const { createLovableAiGatewayProvider, OMNIFLOW_MODEL } = await import("./ai-gateway.server");
-    const { streamText, Output, NoObjectGeneratedError } = await import("ai");
-    const gateway = createLovableAiGatewayProvider(key);
-
-    const schema = z.object({
-      summary: z.string(),
-      sentiment: z.string(),
-      objections: z.string(),
-      talk_ratio: z.number(),
-      action_items: z.array(z.string()),
-    });
-
-    let parsed: z.infer<typeof schema>;
-    try {
-      const result = streamText({
-        model: gateway(OMNIFLOW_MODEL),
-        output: Output.object({ schema }),
-        prompt: `Analyse this call transcript. talk_ratio is the percentage of the conversation spoken by our side (0-100). sentiment is one of positive, neutral, mixed, negative. objections is a short comma separated list, or an empty string. action_items is a list of short imperative next steps, at most five.\n\nPARTICIPANT: ${data.participant}\nDIRECTION: ${data.direction}\n\nTRANSCRIPT:\n${data.transcript}`,
-      });
-      parsed = await result.output;
-    } catch (error) {
-      if (NoObjectGeneratedError.isInstance(error) && error.text) {
-        try {
-          parsed = schema.parse(JSON.parse(error.text));
-        } catch {
-          throw new Error("The AI response could not be read. Try again.");
-        }
-      } else {
-        throw error;
-      }
-    }
+    const { analyseTranscript } = await import("./nlp.server");
+    const a = await analyseTranscript(supabase as any, orgId, key, data);
+    const parsed = {
+      summary: [a.summary, a.buying_signals.length ? `Buying signals: ${a.buying_signals.join("; ")}.` : "", a.risks.length ? `Risks: ${a.risks.join("; ")}.` : "", a.coaching_tip ? `Coaching: ${a.coaching_tip}` : ""].filter(Boolean).join(" "),
+      sentiment: a.sentiment,
+      objections: a.objections.join(", "),
+      talk_ratio: a.talk_ratio,
+      action_items: a.action_items.map((x) => `${x.owner}: ${x.task}`),
+    };
 
     const { data: row, error } = await supabase
       .from("calls")
@@ -871,7 +854,7 @@ export const analyseCall = createServerFn({ method: "POST" })
         direction: data.direction,
         duration_seconds: data.duration_seconds,
         transcript: data.transcript,
-        summary: parsed.summary.slice(0, 800),
+        summary: parsed.summary.slice(0, 1500),
         sentiment: parsed.sentiment.slice(0, 40),
         objections: parsed.objections.slice(0, 400),
         talk_ratio: Math.max(0, Math.min(100, Math.round(parsed.talk_ratio ?? 50))),
@@ -954,31 +937,24 @@ export const draftTicketReply = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as unknown as SupabaseLike;
     const orgId = await currentOrg(supabase);
-    const [{ data: ticket }, { data: sources }, { data: commitments }] = await Promise.all([
-      supabase.from("tickets").select("*").eq("id", data.id).eq("org_id", orgId).maybeSingle(),
-      supabase.from("sources").select("title,content").eq("org_id", orgId).limit(20),
-      supabase.from("commitments").select("*").eq("org_id", orgId).limit(60),
-    ]);
+    const { data: ticket } = await supabase.from("tickets").select("*").eq("id", data.id).eq("org_id", orgId).maybeSingle();
     if (!ticket) throw new Error("Ticket not found.");
-    const t = ticket as Ticket;
-
-    const corpus = ((sources ?? []) as Source[]).map((s) => `${s.title}\n${s.content}`).join("\n\n---\n\n");
-
-    const raw = await runPrompt(
-      `TICKET FROM ${t.requester} (${t.priority} priority, via ${t.channel})\nSubject: ${t.subject}\n\n${t.body}\n\nOUR OWN RECORD:\n${corpus}\n\nTRACKED COMMITMENTS:\n${commitmentLines((commitments ?? []) as Commitment[])}`,
-      "You are an AI receptionist that only answers from the organisation's own record. Reply with a line that reads exactly RESOLVE or ESCALATE, then a line containing only ---, then the customer-facing reply in under 120 words. Choose ESCALATE when the answer is not in the record, when a promise or date must be changed, or when the customer is upset.",
-    );
-    const [verdictLine, ...rest] = raw.split(/\n?---\n?/);
-    const decision = /escalate/i.test(verdictLine ?? "") ? "human" : "auto";
-    const reply = (rest.join("---") || raw).trim();
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI is not configured for this project.");
+    const { writeSupportReply } = await import("./nlp.server");
+    const r = await writeSupportReply(supabase as any, orgId, key, ticket as Ticket);
+    const reply = r.reply;
+    const decision = r.decision === "resolve" ? "auto" : r.decision === "wait" ? "wait" : "human";
+    const status = r.decision === "resolve" ? "resolved" : r.decision === "escalate" ? "escalated" : "open";
+    const note = `${r.internal_note} (intent: ${r.intent}; mood: ${r.customer_emotion}; confidence ${r.confidence}%${r.sources.length ? `; sources: ${r.sources.join(", ")}` : ""})`;
 
     await supabase
       .from("tickets")
-      .update({ ai_reply: reply, resolution: decision, status: decision === "auto" ? "resolved" : "escalated" })
+      .update({ ai_reply: reply, resolution: note.slice(0, 500), status })
       .eq("id", data.id)
       .eq("org_id", orgId);
 
-    return { reply, decision };
+    return { reply, decision, confidence: r.confidence, sources: r.sources, intent: r.intent, emotion: r.customer_emotion };
   });
 
 export const setTicketStatus = createServerFn({ method: "POST" })
