@@ -943,6 +943,48 @@ export type Database = {
           },
         ]
       }
+      projects: {
+        Row: {
+          client_id: string | null
+          color: string
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+        }
+        Update: {
+          client_id?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduler_tokens: {
         Row: {
           id: number
@@ -995,6 +1037,93 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assignee_id: string | null
+          commitment_id: string | null
+          created_at: string
+          description: string | null
+          due_at: string | null
+          id: string
+          org_id: string
+          parent_id: string | null
+          position: number
+          priority: string
+          project_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          commitment_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          org_id: string
+          parent_id?: string | null
+          position?: number
+          priority?: string
+          project_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          commitment_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          org_id?: string
+          parent_id?: string | null
+          position?: number
+          priority?: string
+          project_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_commitment_id_fkey"
+            columns: ["commitment_id"]
+            isOneToOne: false
+            referencedRelation: "commitments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
