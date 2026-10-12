@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- All chat/reasoning AI calls go through createLovableClaudeProvider in src/lib/ai-gateway.server.ts (Anthropic Messages API, streamed) — one place to change the model. Embeddings stay on the gateway embedding model because Claude has none.
