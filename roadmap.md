@@ -1,7 +1,7 @@
 # OmniFlow roadmap — "replace 50+ tools"
 
 - [x] Switch all AI writing/reasoning to Claude
-- [ ] Phase 1: Tasks & projects (spaces, lists, Kanban/list/calendar, subtasks, assignees, priority-based daily task assignment — Trello/Asana/ClickUp)
+- [x] Phase 1: Tasks & projects (spaces, lists, Kanban/list/calendar, subtasks, assignees, priority-based daily task assignment — Trello/Asana/ClickUp)
 - [ ] Phase 2: Docs & wiki (feeds Knowledge Mesh)
 - [ ] Phase 3: Team chat & unified inbox; Slack connection for internal conversations
 - [ ] Phase 4: Time tracking, goals/OKRs, custom dashboards

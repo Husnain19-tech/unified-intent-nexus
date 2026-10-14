@@ -195,6 +195,7 @@ export const planMyDay = createServerFn({ method: "POST" })
         model: createLovableClaudeProvider(key)(OMNIFLOW_CLAUDE_MODEL),
         output: Output.object({ schema }),
         maxOutputTokens: 16000,
+        maxRetries: 0,
         system:
           "You are an operations lead planning today's work. For each team member pick at most 5 of their open tasks for today, ordered by what must happen first: overdue and urgent first, then due soon, then high priority; in-progress work before new work. Unassigned urgent tasks go to the person with the lightest load whose role fits — put them in that person's list and say so in 'why'. 'why' is one short reason. 'note' is one sentence flagging overload or risk for that person. Use only task ids given.",
         prompt: `TODAY: ${new Date().toDateString()}\nTEAM: ${ppl.map((p) => `${p.name} (${p.role_title ?? "team"})`).join(", ")}\n\nOPEN TASKS:\n${open
@@ -211,9 +212,11 @@ export const planMyDay = createServerFn({ method: "POST" })
         }))
         .filter((p) => p.items.length);
     } catch (error) {
-      const s = (error as { statusCode?: number }).statusCode;
-      if (s === 402) throw new Error("Out of AI credits — add credits to plan the day.");
+      const e = error as { statusCode?: number; cause?: { statusCode?: number }; lastError?: { statusCode?: number } };
+      const s = e?.statusCode ?? e?.cause?.statusCode ?? e?.lastError?.statusCode ?? (/Payment Required/.test(String(error)) ? 402 : undefined);
+      if (s === 402) throw new Error("The workspace is out of AI credits. Add credits in Settings, then try Plan today again.");
       if (s === 429) throw new Error("The AI service is busy. Try again shortly.");
+      console.error("planMyDay failed", error);
       throw new Error("Could not build today's plan. Try again.");
     }
   });
