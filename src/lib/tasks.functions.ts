@@ -214,6 +214,7 @@ export const planMyDay = createServerFn({ method: "POST" })
       const s = (error as { statusCode?: number }).statusCode;
       if (s === 402) throw new Error("Out of AI credits — add credits to plan the day.");
       if (s === 429) throw new Error("The AI service is busy. Try again shortly.");
+      console.error("planMyDay failed", error);
       throw new Error("Could not build today's plan. Try again.");
     }
   });
