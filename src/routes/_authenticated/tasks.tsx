@@ -87,7 +87,8 @@ function TasksPage() {
     },
     onError: onErr,
   });
-  const upd = useMutation({ mutationFn: (d: Parameters<typeof updFn>[0]["data"]) => updFn({ data: d }), onSuccess: refresh, onError: onErr });
+  type Upd = { id: string; status?: Task["status"]; priority?: Task["priority"]; assigneeId?: string | null; dueAt?: string | null };
+  const upd = useMutation({ mutationFn: (d: Upd) => updFn({ data: d }), onSuccess: refresh, onError: onErr });
   const del = useMutation({ mutationFn: (id: string) => delFn({ data: { id } }), onSuccess: refresh, onError: onErr });
   const newProj = useMutation({
     mutationFn: (name: string) => projFn({ data: { name } }),
