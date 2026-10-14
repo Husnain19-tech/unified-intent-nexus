@@ -17,6 +17,7 @@ import { Route as AuthenticatedCeoRouteImport } from './routes/_authenticated/ce
 import { Route as AuthenticatedCommandRouteImport } from './routes/_authenticated/command'
 import { Route as AuthenticatedCommitmentsRouteImport } from './routes/_authenticated/commitments'
 import { Route as AuthenticatedDependenciesRouteImport } from './routes/_authenticated/dependencies'
+import { Route as AuthenticatedDocsRouteImport } from './routes/_authenticated/docs'
 import { Route as AuthenticatedExpectationsRouteImport } from './routes/_authenticated/expectations'
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
@@ -68,6 +69,11 @@ const AuthenticatedDependenciesRoute =
     path: '/dependencies',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDocsRoute = AuthenticatedDocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedExpectationsRoute =
   AuthenticatedExpectationsRouteImport.update({
     id: '/expectations',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/command': typeof AuthenticatedCommandRoute
   '/commitments': typeof AuthenticatedCommitmentsRoute
   '/dependencies': typeof AuthenticatedDependenciesRoute
+  '/docs': typeof AuthenticatedDocsRoute
   '/expectations': typeof AuthenticatedExpectationsRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
@@ -141,6 +148,7 @@ export interface FileRoutesByTo {
   '/command': typeof AuthenticatedCommandRoute
   '/commitments': typeof AuthenticatedCommitmentsRoute
   '/dependencies': typeof AuthenticatedDependenciesRoute
+  '/docs': typeof AuthenticatedDocsRoute
   '/expectations': typeof AuthenticatedExpectationsRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
@@ -161,6 +169,7 @@ export interface FileRoutesById {
   '/_authenticated/command': typeof AuthenticatedCommandRoute
   '/_authenticated/commitments': typeof AuthenticatedCommitmentsRoute
   '/_authenticated/dependencies': typeof AuthenticatedDependenciesRoute
+  '/_authenticated/docs': typeof AuthenticatedDocsRoute
   '/_authenticated/expectations': typeof AuthenticatedExpectationsRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/command'
     | '/commitments'
     | '/dependencies'
+    | '/docs'
     | '/expectations'
     | '/finance'
     | '/knowledge'
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/command'
     | '/commitments'
     | '/dependencies'
+    | '/docs'
     | '/expectations'
     | '/finance'
     | '/knowledge'
@@ -218,6 +229,7 @@ export interface FileRouteTypes {
     | '/_authenticated/command'
     | '/_authenticated/commitments'
     | '/_authenticated/dependencies'
+    | '/_authenticated/docs'
     | '/_authenticated/expectations'
     | '/_authenticated/finance'
     | '/_authenticated/knowledge'
@@ -294,6 +306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDependenciesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/docs': {
+      id: '/_authenticated/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof AuthenticatedDocsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/expectations': {
       id: '/_authenticated/expectations'
       path: '/expectations'
@@ -366,6 +385,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCommandRoute: typeof AuthenticatedCommandRoute
   AuthenticatedCommitmentsRoute: typeof AuthenticatedCommitmentsRoute
   AuthenticatedDependenciesRoute: typeof AuthenticatedDependenciesRoute
+  AuthenticatedDocsRoute: typeof AuthenticatedDocsRoute
   AuthenticatedExpectationsRoute: typeof AuthenticatedExpectationsRoute
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
   AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
@@ -382,6 +402,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCommandRoute: AuthenticatedCommandRoute,
   AuthenticatedCommitmentsRoute: AuthenticatedCommitmentsRoute,
   AuthenticatedDependenciesRoute: AuthenticatedDependenciesRoute,
+  AuthenticatedDocsRoute: AuthenticatedDocsRoute,
   AuthenticatedExpectationsRoute: AuthenticatedExpectationsRoute,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
   AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
