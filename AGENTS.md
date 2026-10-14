@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - All chat/reasoning AI calls go through createLovableClaudeProvider in src/lib/ai-gateway.server.ts (Anthropic Messages API, streamed) — one place to change the model. Embeddings stay on the gateway embedding model because Claude has none.
+- Tasks live in their own tasks/projects tables and src/lib/tasks.functions.ts; a task linked to a promise marks that promise delivered when done — keeps tasks and commitments in sync.
