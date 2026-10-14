@@ -17,6 +17,7 @@ import {
   Users,
   Bot,
   ListChecks,
+  BookOpen,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -41,6 +42,7 @@ const NAV_GROUPS = [
     label: "Operations",
     items: [
       { to: "/tasks", label: "Tasks & Projects", icon: ListChecks },
+      { to: "/docs", label: "Docs & Wiki", icon: BookOpen },
       { to: "/commitments", label: "Commitments", icon: Handshake },
       { to: "/people", label: "People & Reliability", icon: Users },
       { to: "/expectations", label: "Expectation Mapper", icon: Boxes },
