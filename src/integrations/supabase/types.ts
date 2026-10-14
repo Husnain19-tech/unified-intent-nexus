@@ -511,6 +511,67 @@ export type Database = {
           },
         ]
       }
+      docs: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          icon: string | null
+          id: string
+          org_id: string
+          parent_id: string | null
+          source_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          org_id: string
+          parent_id?: string | null
+          source_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          org_id?: string
+          parent_id?: string | null
+          source_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "docs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "docs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "docs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "docs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expectations: {
         Row: {
           client_id: string
