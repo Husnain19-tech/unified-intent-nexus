@@ -38,6 +38,17 @@ The repository contains a substantial internal business-operations application p
 | CI build / lint enforcement | Unknown | No workflow evidence was confirmed in this initial review. |
 | Production monitoring / observability | Not evidenced | Prometheus/Grafana/ELK/Jaeger appear in the legacy proposed stack, not as verified current deployments. |
 
+## CI verification — 1 November 2026
+
+GitHub Actions run #6 on the evaluator PR branch (commit 74eef85911c9d23bcb21fa72ce78fcbdda966c49) produced these results:
+
+- Dependency installation: **passed** (bun install --frozen-lockfile).
+- Production build: **passed** (bun run build; client and SSR bundles generated).
+- ESLint: **failed** (1,590 errors and 12 warnings). Of the errors, 1,563 were Prettier formatting violations, 26 were @typescript-eslint/no-explicit-any, and 1 was prefer-const. The generated Supabase types file accounts for 1,087 formatting violations.
+- The build emitted deprecation warnings for createServerFn().inputValidator(); migration to .validator() should be planned and tested.
+
+This is a successful production compilation, not proof that runtime flows, database access, authentication, AI calls, or deployment work end-to-end. The lint baseline remains unresolved.
+
 ## Engineering / security observations
 
 1. The `main` branch contains a tracked `.env` file. The inspected file contains Supabase project configuration and a publishable client key; no service-role or AI gateway secret was present in that file. Publishable keys are designed for client exposure, but environment files should still not be committed. Remove the tracked file and retain only placeholder templates.
