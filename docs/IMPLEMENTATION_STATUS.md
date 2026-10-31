@@ -40,11 +40,11 @@ The repository contains a substantial internal business-operations application p
 
 ## Engineering / security observations
 
-1. The current `.gitignore` does not explicitly ignore `.env` files. Add explicit ignore rules while allowing a placeholder-only `.env.example`.
+1. The `main` branch contains a tracked `.env` file. The inspected file contains Supabase project configuration and a publishable client key; no service-role or AI gateway secret was present in that file. Publishable keys are designed for client exposure, but environment files should still not be committed. Remove the tracked file and retain only placeholder templates.
 2. No `.env.example` or `.env.template` was found at the repository root during this review.
 3. The server-side Supabase admin client uses a service-role key that bypasses RLS. Keep all use server-only.
 4. A scheduler endpoint checks a stored token and obtains the AI key from an environment variable. Verify rate limiting, auditability, and production scheduler configuration.
-5. Searches of the current default-branch code did not find common literal patterns such as `sk-ant-`, `ghp_`, or `github_pat_`. This is not a complete secret audit and does not cover all historical commits or every secret format. Run a history-aware scanner and rotate any exposed credentials.
+5. A tracked `.env` file was found on `main` and removed from the evaluator branch in this PR. This does not remove it from `main` until the PR is merged, nor does it erase prior Git history. The inspected file contained only Supabase publishable configuration, not a service-role or AI gateway secret. A history-aware scan is still required before concluding that no other secrets were exposed.
 
 ## What is needed before claiming completion
 
