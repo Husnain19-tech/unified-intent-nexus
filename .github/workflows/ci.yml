@@ -1,6 +1,8 @@
 name: OmniFlow CI
 
 on:
+  push:
+    branches: [chore/omni-evaluator-baseline]
   pull_request:
     branches: [main]
   workflow_dispatch:
