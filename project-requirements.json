@@ -286,8 +286,7 @@
       "acceptance": [
         "Production build passes in CI",
         "Lint passes in CI",
-        "Type checking is enforced",
-        "Type checking is still not enforced; add a dedicated typecheck command and CI step."
+        "Type checking is enforced"
       ],
       "verificationRequired": [
         "build",
