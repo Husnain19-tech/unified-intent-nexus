@@ -277,14 +277,17 @@
       "name": "Build and static analysis",
       "category": "engineering-quality",
       "priority": "critical",
-      "status": "unknown",
+      "status": "partial",
       "evidence": [
-        "package.json"
+        "package.json",
+        ".github/workflows/ci.yml",
+        "eslint.config.js"
       ],
       "acceptance": [
         "Production build passes in CI",
         "Lint passes in CI",
-        "Type checking is enforced"
+        "Type checking is enforced",
+        "Type checking is still not enforced; add a dedicated typecheck command and CI step."
       ],
       "verificationRequired": [
         "build",
