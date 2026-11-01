@@ -31,6 +31,9 @@ jobs:
       - name: Run ESLint
         run: bun run lint
 
+      - name: Run TypeScript typecheck
+        run: bun run typecheck
+
       - name: Build for production
         if: always()
         run: bun run build
