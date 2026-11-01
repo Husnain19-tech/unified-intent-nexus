@@ -70,3 +70,14 @@ This is a successful production compilation, not proof that runtime flows, datab
 ## How to update this report
 
 Update each capability only when there is new evidence. Record evidence paths and verification run IDs. Do not infer completion from commit count, route count, UI screenshots, or README claims alone.
+
+
+## Lint baseline remediation — 1 November 2026
+
+The first CI lint run exposed three different concerns that were previously bundled into one command:
+
+- Prettier formatting debt was reported as ESLint errors because `eslint-plugin-prettier` was wired into the ESLint configuration. Formatting policy is now separated from correctness lint; no repository-wide reformat was applied.
+- Generated Supabase schema and Lovable preview-auth files are excluded from source lint because they are generated artifacts and should not be hand-edited.
+- Existing explicit-`any` use remains visible as warnings in the eight legacy Supabase adapter / server-function modules identified by CI. This is a scoped migration exception, not a project-wide disable. New modules continue to receive the recommended error-level rule. The warnings must be removed by introducing typed Supabase query interfaces in those modules.
+
+The generated preview-auth file was deliberately not edited to fix its `prefer-const` diagnostic; it is now treated as generated output. The next CI run must confirm the updated ESLint configuration and production build. Until that run completes successfully, this remediation is **pending verification**.
