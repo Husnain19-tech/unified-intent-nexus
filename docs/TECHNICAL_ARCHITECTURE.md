@@ -50,7 +50,7 @@ The code references these names. Confirm deployment configuration separately; th
 
 ## Verification gaps
 
-At the time of review, `package.json` has `dev`, `build`, `build:dev`, `preview`, `lint`, and `format` scripts. It does not declare a test script or a visible unit/e2e test framework. No build, lint, test, or deployment run was executed as part of this static review.
+At the time of the initial static review, `package.json` had `dev`, `build`, `build:dev`, `preview`, `lint`, and `format` scripts. A subsequent CI workflow now runs locked dependency installation, ESLint, and production build. The latest recorded CI run passed all three steps; the lint configuration still emits non-blocking warnings in legacy adapter modules and React components. There is still no test script or visible unit/e2e test framework, and a dedicated TypeScript typecheck is not yet enforced.
 
 ## Evaluator rules
 
