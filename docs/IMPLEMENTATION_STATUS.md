@@ -80,4 +80,10 @@ The first CI lint run exposed three different concerns that were previously bund
 - Generated Supabase schema and Lovable preview-auth files are excluded from source lint because they are generated artifacts and should not be hand-edited.
 - Existing explicit-`any` use remains visible as warnings in the eight legacy Supabase adapter / server-function modules identified by CI. This is a scoped migration exception, not a project-wide disable. New modules continue to receive the recommended error-level rule. The warnings must be removed by introducing typed Supabase query interfaces in those modules.
 
-The generated preview-auth file was deliberately not edited to fix its `prefer-const` diagnostic; it is now treated as generated output. The next CI run must confirm the updated ESLint configuration and production build. Until that run completes successfully, this remediation is **pending verification**.
+The generated preview-auth file was deliberately not edited to fix its `prefer-const` diagnostic; it is now treated as generated output. GitHub Actions run #12 (commit `6eaf08fbab7c74c09bbdc4c0e9466f4a8f207097`) confirmed the updated configuration:
+
+- Dependency installation: **passed**.
+- ESLint: **passed** (exit code 0). Existing explicit-`any` use remains as warnings in the eight scoped legacy modules; React Fast Refresh and React Hooks warnings also remain.
+- Production build: **passed** for client, SSR, and Nitro environments.
+
+This closes the initial CI baseline task. It does **not** close the typed-Supabase migration, React warning cleanup, formatting consistency, runtime/E2E, database/auth/AI-provider, or deployment verification tasks.
