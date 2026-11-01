@@ -1,0 +1,354 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "name": "OmniFlow",
+    "repository": "Husnain19-tech/unified-intent-nexus",
+    "baselineBranch": "main",
+    "baselineReviewedAt": "2026-11-01",
+    "purpose": "AI-native business operations platform; current FYP/MVP scope is narrower than the long-term vision."
+  },
+  "interpretationRules": [
+    "The root README is aspirational product vision and legacy stack context, not an implementation checklist.",
+    "roadmap.md checkboxes are owner-maintained claims and must be corroborated by code and tests.",
+    "Do not mark a feature complete from a route or UI component alone.",
+    "Separate native functionality, mock/demo functionality, and live third-party integrations.",
+    "Never include secret values in evaluator output."
+  ],
+  "statusDefinitions": {
+    "implemented": "Implementation evidence and relevant automated verification both exist.",
+    "partial": "Some implementation exists, but acceptance criteria or verification are incomplete.",
+    "planned": "Explicitly in roadmap/vision; no implementation evidence established.",
+    "unknown": "Insufficient evidence to assess reliably."
+  },
+  "requirements": [
+    {
+      "id": "CORE-001",
+      "name": "Tasks and projects",
+      "category": "core-workflows",
+      "priority": "critical",
+      "status": "partial",
+      "evidence": [
+        "src/lib/tasks.functions.ts",
+        "src/routes/_authenticated/tasks.tsx",
+        "drizzle/migrations/0000_tasks_and_projects.sql"
+      ],
+      "acceptance": [
+        "Create, update, assign, prioritize, and complete tasks",
+        "Persist task/project data with organization isolation",
+        "Task-to-commitment lifecycle is covered by tests",
+        "Production build and end-to-end workflow pass"
+      ],
+      "verificationRequired": [
+        "build",
+        "integration-test",
+        "e2e-test"
+      ]
+    },
+    {
+      "id": "CORE-002",
+      "name": "Docs and wiki",
+      "category": "core-workflows",
+      "priority": "high",
+      "status": "partial",
+      "evidence": [
+        "src/lib/docs.functions.ts",
+        "src/lib/knowledge.server.ts",
+        "roadmap.md"
+      ],
+      "acceptance": [
+        "Create and edit documents",
+        "Index document content",
+        "Retrieve relevant passages with organization isolation",
+        "Indexing failures are recoverable and visible"
+      ],
+      "verificationRequired": [
+        "integration-test",
+        "e2e-test"
+      ]
+    },
+    {
+      "id": "AI-001",
+      "name": "Contextual Knowledge Mesh",
+      "category": "intelligence-models",
+      "priority": "critical",
+      "status": "partial",
+      "evidence": [
+        "src/lib/ai-gateway.server.ts",
+        "src/lib/knowledge.server.ts",
+        "src/lib/nlp.server.ts"
+      ],
+      "acceptance": [
+        "Chunk and embed supported sources",
+        "Persist and retrieve vectors scoped to organization",
+        "Expose source-grounded retrieval results",
+        "Handle gateway limits, timeouts, and reindexing safely"
+      ],
+      "verificationRequired": [
+        "integration-test",
+        "ai-evaluation"
+      ]
+    },
+    {
+      "id": "AI-002",
+      "name": "Micro-Commitment Tracker",
+      "category": "intelligence-models",
+      "priority": "critical",
+      "status": "partial",
+      "evidence": [
+        "src/lib/knowledge.server.ts",
+        "src/lib/tasks.functions.ts",
+        "src/lib/agents.server.ts"
+      ],
+      "acceptance": [
+        "Capture owner, counterparty, promise, due date, and status",
+        "Link commitments to tasks where applicable",
+        "Detect duplicates and update lifecycle correctly",
+        "Validate risk scoring against labeled examples"
+      ],
+      "verificationRequired": [
+        "unit-test",
+        "integration-test",
+        "ai-evaluation"
+      ]
+    },
+    {
+      "id": "AI-003",
+      "name": "Client Expectation Mapper",
+      "category": "intelligence-models",
+      "priority": "high",
+      "status": "unknown",
+      "evidence": [
+        "src/routes/_authenticated/expectations.tsx"
+      ],
+      "acceptance": [
+        "Capture client and internal definitions of done",
+        "Identify semantic gaps with evidence",
+        "Track expectation changes over time",
+        "Validate risk flags against reviewed examples"
+      ],
+      "verificationRequired": [
+        "integration-test",
+        "ai-evaluation"
+      ]
+    },
+    {
+      "id": "AI-004",
+      "name": "Silent Dependency Monitor",
+      "category": "intelligence-models",
+      "priority": "high",
+      "status": "unknown",
+      "evidence": [
+        "src/routes/_authenticated/dependencies.tsx"
+      ],
+      "acceptance": [
+        "Discover dependencies from real source/config inputs",
+        "Map affected modules and owners",
+        "Explain risk with traceable evidence",
+        "Validate findings against known breaking changes"
+      ],
+      "verificationRequired": [
+        "unit-test",
+        "integration-test"
+      ]
+    },
+    {
+      "id": "AI-005",
+      "name": "AI CEO and autonomous operations",
+      "category": "intelligence-models",
+      "priority": "critical",
+      "status": "partial",
+      "evidence": [
+        "src/lib/agents.server.ts",
+        "src/lib/agents.functions.ts",
+        "src/routes/api/public/agents/run.ts"
+      ],
+      "acceptance": [
+        "Define agent scope and allowed actions",
+        "Require organization-scoped authorization",
+        "Record before/after values and rationale",
+        "Support pause, retry, rollback, and human approval for high-impact actions",
+        "Cover all claimed agent pillars or explicitly narrow product claims"
+      ],
+      "verificationRequired": [
+        "unit-test",
+        "integration-test",
+        "security-review"
+      ]
+    },
+    {
+      "id": "AI-006",
+      "name": "AI hiring intelligence",
+      "category": "intelligence-models",
+      "priority": "medium",
+      "status": "planned",
+      "evidence": [
+        "README.md"
+      ],
+      "acceptance": [
+        "Document ethical constraints and human oversight",
+        "Implement explainable, job-related evaluation only",
+        "Test for bias and accessibility"
+      ],
+      "verificationRequired": [
+        "security-review",
+        "ai-evaluation"
+      ]
+    },
+    {
+      "id": "INT-001",
+      "name": "Production connector framework",
+      "category": "integrations",
+      "priority": "critical",
+      "status": "planned",
+      "evidence": [
+        "README.md",
+        "roadmap.md"
+      ],
+      "acceptance": [
+        "Define connector contract and OAuth/token lifecycle",
+        "Implement webhook/event ingestion and retry handling",
+        "Demonstrate each connector against a sandbox/live test account",
+        "Publish a verified connector inventory"
+      ],
+      "verificationRequired": [
+        "integration-test",
+        "security-review"
+      ]
+    },
+    {
+      "id": "INT-002",
+      "name": "Team chat and unified inbox",
+      "category": "integrations",
+      "priority": "high",
+      "status": "planned",
+      "evidence": [
+        "roadmap.md"
+      ],
+      "acceptance": [
+        "Unified message model and permissions",
+        "Slack connection and sync",
+        "Idempotent event processing"
+      ],
+      "verificationRequired": [
+        "integration-test",
+        "e2e-test"
+      ]
+    },
+    {
+      "id": "INT-003",
+      "name": "Email and calendar integration",
+      "category": "integrations",
+      "priority": "high",
+      "status": "planned",
+      "evidence": [
+        "roadmap.md"
+      ],
+      "acceptance": [
+        "Microsoft 365/Outlook authorization",
+        "Sync, send, and event reconciliation",
+        "Retry and token refresh handling"
+      ],
+      "verificationRequired": [
+        "integration-test",
+        "security-review"
+      ]
+    },
+    {
+      "id": "INT-004",
+      "name": "Meetings and telephony",
+      "category": "integrations",
+      "priority": "high",
+      "status": "planned",
+      "evidence": [
+        "roadmap.md"
+      ],
+      "acceptance": [
+        "Scheduling and meeting provider integration",
+        "Call provider integration tested in sandbox",
+        "Recording/transcript consent and retention controls"
+      ],
+      "verificationRequired": [
+        "integration-test",
+        "security-review"
+      ]
+    },
+    {
+      "id": "ENG-001",
+      "name": "Build and static analysis",
+      "category": "engineering-quality",
+      "priority": "critical",
+      "status": "implemented",
+      "evidence": [
+        "package.json",
+        ".github/workflows/ci.yml",
+        "eslint.config.js"
+      ],
+      "acceptance": [
+        "Production build passes in CI",
+        "Lint passes in CI",
+        "Type checking is enforced"
+      ],
+      "verificationRequired": [
+        "build",
+        "lint",
+        "typecheck"
+      ]
+    },
+    {
+      "id": "ENG-002",
+      "name": "Automated test suite",
+      "category": "engineering-quality",
+      "priority": "critical",
+      "status": "planned",
+      "evidence": [
+        "package.json"
+      ],
+      "acceptance": [
+        "Unit tests cover critical pure logic",
+        "Integration tests cover auth, RLS, persistence, and AI gateway failures",
+        "E2E tests cover key FYP workflows"
+      ],
+      "verificationRequired": [
+        "unit-test",
+        "integration-test",
+        "e2e-test"
+      ]
+    },
+    {
+      "id": "SEC-001",
+      "name": "Secrets and environment hygiene",
+      "category": "security",
+      "priority": "critical",
+      "status": "partial",
+      "evidence": [
+        ".gitignore",
+        "src/integrations/supabase/client.server.ts",
+        "src/lib/ai-gateway.server.ts"
+      ],
+      "acceptance": [
+        "Ignore local environment files",
+        "Provide placeholder-only environment template",
+        "Run history-aware secret scanning",
+        "Store credentials in deployment/GitHub secrets only",
+        "Rotate any credential found in public history"
+      ],
+      "verificationRequired": [
+        "secret-scan",
+        "security-review"
+      ]
+    }
+  ],
+  "evaluatorPolicy": {
+    "defaultMode": "read-only",
+    "neverPushToMain": true,
+    "featureCompletionRequiresVerification": true,
+    "reportSecretValues": false,
+    "scoreCommitActivitySeparately": true,
+    "allowModelProviders": [
+      "anthropic",
+      "openai-compatible",
+      "ollama",
+      "other-configured-provider"
+    ]
+  }
+}

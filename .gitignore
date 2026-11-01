@@ -30,3 +30,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.example.*
+!.env.template
+!.env.template.*
+*.pem
+*.key
+*.p12
+*.pfx
