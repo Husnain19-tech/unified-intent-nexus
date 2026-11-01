@@ -9,4 +9,4 @@
 - [ ] Phase 6: Meetings (scheduling, Zoom/Teams links, notes, action items)
 - [ ] Phase 7: Dialer: client voice calls, texting, call transfer between internal departments (needs a calling provider account, e.g. Twilio)
 - [ ] Phase 8: GoHighLevel-style CRM gaps (pipelines, automations, SMS campaigns)
-- [ ] Milestone 2: read-only runtime smoke-test audit (no code changes)
+- [x] Milestone 2: read-only runtime smoke-test audit (no code changes)
