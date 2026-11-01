@@ -87,3 +87,15 @@ The generated preview-auth file was deliberately not edited to fix its `prefer-c
 - Production build: **passed** for client, SSR, and Nitro environments.
 
 This closes the initial CI baseline task. It does **not** close the typed-Supabase migration, React warning cleanup, formatting consistency, runtime/E2E, database/auth/AI-provider, or deployment verification tasks.
+
+
+## Engineering quality gate — CI run #24, 1 November 2026
+
+GitHub Actions run #24 on commit `a88bba17005da526fc270169cdcc7d9968a05576` passed all required engineering gates:
+
+- Locked dependency installation: **passed**.
+- ESLint: **passed** (exit code 0; non-blocking warnings remain and are documented above).
+- TypeScript: **passed** (`tsc --noEmit`, strict compiler settings from the repository tsconfig).
+- Production build: **passed** (client, SSR, and Nitro environments).
+
+The repository now has a separate `typecheck` package script and CI step. This establishes a reproducible compile/lint/typecheck baseline; it does not replace unit, integration, or end-to-end tests, nor does it prove runtime behavior against Supabase or the AI gateway.
