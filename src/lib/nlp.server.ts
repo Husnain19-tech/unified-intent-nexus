@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getHttpStatus } from "./ai-errors.server";
 
 type Db = { rpc: (fn: string, args?: Record<string, unknown>) => any; from: (table: string) => any };
 
@@ -6,11 +7,6 @@ export class AiBlocked extends Error {
   constructor(message: string, public status: number) {
     super(message);
   }
-}
-
-function statusOf(error: unknown): number | undefined {
-  const e = error as { statusCode?: number; status?: number; cause?: { statusCode?: number } };
-  return e?.statusCode ?? e?.status ?? e?.cause?.statusCode;
 }
 
 /** One structured, reasoning-backed call on the Lovable AI Gateway. */
@@ -28,7 +24,7 @@ async function structured<T extends z.ZodTypeAny>(key: string, system: string, p
     });
     return await result.output;
   } catch (error) {
-    const status = statusOf(error);
+    const status = getHttpStatus(error);
     if (status === 402) throw new AiBlocked("Out of AI credits — add credits to keep the agents working.", 402);
     if (status === 403) throw new AiBlocked("AI access is blocked for this workspace.", 403);
     if (status === 429) throw new AiBlocked("The AI service is busy. Try again shortly.", 429);
@@ -36,10 +32,10 @@ async function structured<T extends z.ZodTypeAny>(key: string, system: string, p
       try {
         return schema.parse(JSON.parse(error.text));
       } catch {
-        /* fall through */
+        throw new Error("The AI response contained invalid structured output.");
       }
     }
-    throw new Error("The AI response could not be read. Try again.");
+    throw error;
   }
 }
 

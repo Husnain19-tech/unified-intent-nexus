@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { getHttpStatus } from "./ai-errors.server";
 
 export type Commitment = {
   id: string;
@@ -315,11 +316,15 @@ export const ingestSource = createServerFn({ method: "POST" })
       });
       parsed = await result.output;
     } catch (error) {
+      const status = getHttpStatus(error);
+      if (status === 402) throw new Error("Out of AI credits — add credits to continue.");
+      if (status === 403) throw new Error("AI access is blocked for this workspace.");
+      if (status === 429) throw new Error("The AI service is busy. Try again shortly.");
       if (NoObjectGeneratedError.isInstance(error) && error.text) {
         try {
           parsed = schema.parse(JSON.parse(error.text));
         } catch {
-          throw new Error("The AI response could not be read. Try again.");
+          throw new Error("The AI response contained invalid structured output.");
         }
       } else {
         throw error;

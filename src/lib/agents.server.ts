@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getHttpStatus } from "./ai-errors.server";
 
 type Db = {
   rpc: (fn: string, args?: Record<string, unknown>) => any;
@@ -32,11 +33,6 @@ type Decision = z.infer<typeof DecisionSchema>["decisions"][number];
 
 export class AgentPause extends Error {}
 
-function statusOf(error: unknown): number | undefined {
-  const e = error as { statusCode?: number; status?: number; cause?: { statusCode?: number } };
-  return e?.statusCode ?? e?.status ?? e?.cause?.statusCode;
-}
-
 async function decide(key: string, instructions: string, items: unknown[]): Promise<Decision[]> {
   const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
   const { streamText, Output, NoObjectGeneratedError } = await import("ai");
@@ -51,14 +47,14 @@ async function decide(key: string, instructions: string, items: unknown[]): Prom
     });
     return (await result.output).decisions;
   } catch (error) {
-    const status = statusOf(error);
+    const status = getHttpStatus(error);
     if (status === 402) throw new AgentPause("Out of AI credits — add credits, then resume the agents.");
     if (status === 403) throw new AgentPause("AI access is blocked for this workspace — resume once it is re-enabled.");
     if (NoObjectGeneratedError.isInstance(error) && error.text) {
       try {
         return DecisionSchema.parse(JSON.parse(error.text)).decisions;
       } catch {
-        return [];
+        throw new Error("The AI response contained invalid structured output.");
       }
     }
     throw error;
