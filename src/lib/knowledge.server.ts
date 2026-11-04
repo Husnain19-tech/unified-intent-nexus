@@ -29,7 +29,7 @@ export async function indexSource(
   const inputs = chunks.map((c) => `${source.title}\n\n${c}`);
   const vectors = await embedTexts(key, inputs);
 
-  await supabase.from("knowledge_chunks").delete().eq("source_id", source.id).eq("kind", "source");
+  await supabase.from("knowledge_chunks").delete().eq("source_id", source.id).eq("org_id", orgId).eq("kind", "source");
 
   const rows = chunks.map((content, i) => ({
     org_id: orgId,

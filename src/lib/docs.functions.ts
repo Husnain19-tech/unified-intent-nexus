@@ -75,7 +75,7 @@ export const saveDoc = createServerFn({ method: "POST" })
 
     const fields = { title: data.title, content: text, channel: "doc", summary: "Wiki page" };
     if (sourceId) {
-      await db.from("sources").update(fields).eq("id", sourceId);
+      await db.from("sources").update(fields).eq("id", sourceId).eq("org_id", orgId);
     } else {
       const { data: src, error: se } = await db
         .from("sources")
@@ -84,7 +84,7 @@ export const saveDoc = createServerFn({ method: "POST" })
         .single();
       if (se) throw new Error(se.message);
       sourceId = (src as { id: string }).id;
-      await db.from("docs").update({ source_id: sourceId }).eq("id", data.id);
+      await db.from("docs").update({ source_id: sourceId }).eq("id", data.id).eq("org_id", orgId);
     }
 
     try {
@@ -107,8 +107,8 @@ export const deleteDoc = createServerFn({ method: "POST" })
     const { data: doc } = await db.from("docs").select("source_id").eq("id", data.id).eq("org_id", orgId).single();
     const sid = (doc as { source_id: string | null } | null)?.source_id;
     if (sid) {
-      await db.from("knowledge_chunks").delete().eq("source_id", sid);
-      await db.from("sources").delete().eq("id", sid);
+      await db.from("knowledge_chunks").delete().eq("source_id", sid).eq("org_id", orgId);
+      await db.from("sources").delete().eq("id", sid).eq("org_id", orgId);
     }
     const { error } = await db.from("docs").delete().eq("id", data.id).eq("org_id", orgId);
     if (error) throw new Error(error.message);

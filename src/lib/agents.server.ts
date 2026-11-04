@@ -412,6 +412,6 @@ export async function undoDecision(db: Db, orgId: string, id: string) {
     const { error: e } = await db.from(d.target_table).update(d.before).eq("id", d.target_id).eq("org_id", orgId);
     if (e) throw new Error(e.message);
   }
-  await db.from("agent_decisions").update({ undone_at: new Date().toISOString() }).eq("id", id);
+  await db.from("agent_decisions").update({ undone_at: new Date().toISOString() }).eq("id", id).eq("org_id", orgId);
   return { ok: true };
 }
