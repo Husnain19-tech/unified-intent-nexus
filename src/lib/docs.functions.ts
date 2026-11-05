@@ -49,7 +49,7 @@ export const createDoc = createServerFn({ method: "POST" })
     return row as { id: string };
   });
 
-/** Save a doc and feed it into company memory (as a source + embeddings). */
+/** Save a doc and keep its company-memory source and embeddings in sync. */
 export const saveDoc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
@@ -71,28 +71,42 @@ export const saveDoc = createServerFn({ method: "POST" })
 
     const text = data.content.trim();
     let sourceId = (doc as { source_id: string | null }).source_id;
-    if (!text) return { indexed: 0, memory: "empty" as const };
+
+    // A never-indexed empty document has no memory source to synchronize.
+    if (!text && !sourceId) return { indexed: 0, memory: "empty" as const };
 
     const fields = { title: data.title, content: text, channel: "doc", summary: "Wiki page" };
     if (sourceId) {
-      await db.from("sources").update(fields).eq("id", sourceId).eq("org_id", orgId);
+      const { error: sourceError } = await db
+        .from("sources")
+        .update(fields)
+        .eq("id", sourceId)
+        .eq("org_id", orgId);
+      if (sourceError) throw new Error(sourceError.message);
     } else {
-      const { data: src, error: se } = await db
+      const { data: src, error: sourceError } = await db
         .from("sources")
         .insert({ org_id: orgId, created_by: context.userId, ...fields })
         .select("id")
         .single();
-      if (se) throw new Error(se.message);
+      if (sourceError) throw new Error(sourceError.message);
       sourceId = (src as { id: string }).id;
-      await db.from("docs").update({ source_id: sourceId }).eq("id", data.id).eq("org_id", orgId);
+
+      const { error: linkError } = await db
+        .from("docs")
+        .update({ source_id: sourceId })
+        .eq("id", data.id)
+        .eq("org_id", orgId);
+      if (linkError) throw new Error(linkError.message);
     }
 
     try {
       const key = process.env["LOVABLE_API_KEY"];
-      if (!key) throw new Error("AI key missing");
+      // Empty content needs no provider call; indexSource still removes stale chunks.
+      if (text && !key) throw new Error("AI key missing");
       const { indexSource } = await import("./knowledge.server");
-      const n = await indexSource(db, key, orgId, { id: sourceId!, title: data.title, content: text });
-      return { indexed: n, memory: "ok" as const };
+      const n = await indexSource(db, key ?? "", orgId, { id: sourceId!, title: data.title, content: text });
+      return { indexed: n, memory: text ? ("ok" as const) : ("empty" as const) };
     } catch (e) {
       return { indexed: 0, memory: "pending" as const, reason: e instanceof Error ? e.message : String(e) };
     }
