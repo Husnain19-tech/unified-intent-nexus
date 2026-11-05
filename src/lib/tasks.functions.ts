@@ -115,8 +115,22 @@ export const updateTask = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     // Keep the linked promise in step with its task.
     if (data.status === "done") {
-      const { data: t } = await db.from("tasks").select("commitment_id").eq("id", data.id).maybeSingle();
-      if (t?.commitment_id) await db.from("commitments").update({ status: "delivered" }).eq("id", t.commitment_id);
+      const { data: t, error: taskError } = await db
+        .from("tasks")
+        .select("commitment_id")
+        .eq("id", data.id)
+        .eq("org_id", orgId)
+        .maybeSingle();
+      if (taskError) throw new Error(taskError.message);
+
+      if (t?.commitment_id) {
+        const { error: commitmentError } = await db
+          .from("commitments")
+          .update({ status: "delivered" })
+          .eq("id", t.commitment_id)
+          .eq("org_id", orgId);
+        if (commitmentError) throw new Error(commitmentError.message);
+      }
     }
     return { ok: true };
   });
