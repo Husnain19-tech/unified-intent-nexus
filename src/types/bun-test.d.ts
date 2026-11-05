@@ -3,6 +3,7 @@ declare module "bun:test" {
   export const it: (name: string, fn: () => void) => void;
   export const expect: (value: unknown) => {
     toBe(expected: unknown): void;
+    toEqual(expected: unknown): void;
     toBeUndefined(): void;
   };
 }
