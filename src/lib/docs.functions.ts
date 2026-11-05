@@ -118,12 +118,28 @@ export const deleteDoc = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const db = context.supabase as unknown as Db;
     const orgId = await org(db);
-    const { data: doc } = await db.from("docs").select("source_id").eq("id", data.id).eq("org_id", orgId).single();
-    const sid = (doc as { source_id: string | null } | null)?.source_id;
+    const { data: doc, error: lookupError } = await db
+      .from("docs")
+      .select("source_id")
+      .eq("id", data.id)
+      .eq("org_id", orgId)
+      .maybeSingle();
+    if (lookupError) throw new Error(lookupError.message);
+    if (!doc) return { ok: true };
+
+    const sid = (doc as { source_id: string | null }).source_id;
     if (sid) {
-      await db.from("knowledge_chunks").delete().eq("source_id", sid).eq("org_id", orgId);
-      await db.from("sources").delete().eq("id", sid).eq("org_id", orgId);
+      const { error: chunksError } = await db
+        .from("knowledge_chunks")
+        .delete()
+        .eq("source_id", sid)
+        .eq("org_id", orgId);
+      if (chunksError) throw new Error(chunksError.message);
+
+      const { error: sourceError } = await db.from("sources").delete().eq("id", sid).eq("org_id", orgId);
+      if (sourceError) throw new Error(sourceError.message);
     }
+
     const { error } = await db.from("docs").delete().eq("id", data.id).eq("org_id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
