@@ -1,3 +1,4 @@
+import { assertQuerySuccess } from "./query-errors.server";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
@@ -37,6 +38,11 @@ export const getTasks = createServerFn({ method: "GET" })
       db.from("tasks").select("*").eq("org_id", orgId).order("position"),
       db.from("people").select("id,name").eq("org_id", orgId).order("name"),
     ]);
+    assertQuerySuccess(
+      { label: "Failed to load projects", error: p.error },
+      { label: "Failed to load tasks", error: t.error },
+      { label: "Failed to load team members", error: people.error },
+    );
     return {
       projects: (p.data ?? []) as Project[],
       tasks: (t.data ?? []) as Task[],
@@ -152,10 +158,14 @@ export const tasksFromCommitments = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const db = context.supabase as unknown as Db;
     const orgId = await org(db);
-    const [{ data: cs }, { data: existing }] = await Promise.all([
+    const [{ data: cs, error: commitmentsError }, { data: existing, error: tasksError }] = await Promise.all([
       db.from("commitments").select("id,promise,person_id,due_at,risk_score,quote").eq("org_id", orgId).eq("status", "open"),
       db.from("tasks").select("commitment_id").eq("org_id", orgId).not("commitment_id", "is", null),
     ]);
+    assertQuerySuccess(
+      { label: "Failed to load open commitments", error: commitmentsError },
+      { label: "Failed to load existing commitment tasks", error: tasksError },
+    );
     const taken = new Set(((existing ?? []) as { commitment_id: string }[]).map((r) => r.commitment_id));
     const rows = ((cs ?? []) as { id: string; promise: string; person_id: string | null; due_at: string | null; risk_score: number | null; quote: string | null }[])
       .filter((c) => !taken.has(c.id))
@@ -184,10 +194,14 @@ export const planMyDay = createServerFn({ method: "POST" })
     const orgId = await org(db);
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) throw new Error("AI is not configured for this project.");
-    const [{ data: tasks }, { data: people }] = await Promise.all([
+    const [{ data: tasks, error: tasksError }, { data: people, error: peopleError }] = await Promise.all([
       db.from("tasks").select("id,title,status,priority,assignee_id,due_at").eq("org_id", orgId).neq("status", "done"),
       db.from("people").select("id,name,role_title").eq("org_id", orgId),
     ]);
+    assertQuerySuccess(
+      { label: "Failed to load open tasks", error: tasksError },
+      { label: "Failed to load team members", error: peopleError },
+    );
     const open = (tasks ?? []) as Task[];
     if (open.length === 0) return [];
     const ppl = (people ?? []) as { id: string; name: string; role_title: string | null }[];
