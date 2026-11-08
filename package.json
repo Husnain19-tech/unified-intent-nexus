@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "evaluate": "bun evaluator/run.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
