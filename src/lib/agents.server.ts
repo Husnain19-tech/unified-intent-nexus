@@ -77,7 +77,7 @@ async function record(
     rationale: string;
   },
 ) {
-  await ctx.db.from("agent_decisions").insert({
+  const { error } = await ctx.db.from("agent_decisions").insert({
     org_id: ctx.orgId,
     run_id: ctx.runId,
     agent: d.agent,
@@ -90,6 +90,7 @@ async function record(
     created_record: d.created ?? false,
     rationale: d.rationale.slice(0, 500),
   });
+  if (error) throw new Error(`Failed to persist agent decision audit record: ${error.message}`);
 }
 
 async function updateTracked(
@@ -167,21 +168,23 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
 
 async function salesAgent(ctx: Ctx) {
   const cutoff = new Date(Date.now() - 3 * 86400000).toISOString();
-  const { data } = await ctx.db
+  const { data, error: leadsError } = await ctx.db
     .from("leads")
     .select("*")
     .eq("org_id", ctx.orgId)
     .not("stage", "in", "(won,lost)")
     .or(`last_touch_at.is.null,last_touch_at.lt.${cutoff}`)
     .limit(4);
+  if (leadsError) throw new Error(`Failed to load sales leads: ${leadsError.message}`);
   const leads = (data ?? []) as any[];
   if (!leads.length) return 0;
-  const { data: touchRows } = await ctx.db
+  const { data: touchRows, error: touchesError } = await ctx.db
     .from("lead_touches")
     .select("*")
     .eq("org_id", ctx.orgId)
     .in("lead_id", leads.map((l) => l.id))
     .order("created_at", { ascending: false });
+  if (touchesError) throw new Error(`Failed to load sales touch history: ${touchesError.message}`);
   const touchesFor = (id: string) => ((touchRows ?? []) as any[]).filter((t) => t.lead_id === id);
 
   const decisions = await decide(
@@ -221,11 +224,12 @@ async function salesAgent(ctx: Ctx) {
     n += await updateTracked(ctx, "sales", "leads", lead, patch, d.action, lead.company, `${d.rationale} Angle: ${outreach.angle}`);
 
     const body = [outreach.subject ? `Subject: ${outreach.subject}` : "", outreach.message].filter(Boolean).join("\n\n");
-    const { data: touch } = await ctx.db
+    const { data: touch, error: touchError } = await ctx.db
       .from("lead_touches")
       .insert({ org_id: ctx.orgId, lead_id: lead.id, channel, note: `AI draft (${outreach.angle}):\n${body}`.slice(0, 2000), sentiment: outreach.sentiment })
       .select("id")
       .single();
+    if (touchError) throw new Error(`Failed to save AI outreach draft: ${touchError.message}`);
     if (touch) {
       await record(ctx, {
         agent: "sales",
@@ -250,7 +254,8 @@ async function salesAgent(ctx: Ctx) {
 }
 
 async function voipAgent(ctx: Ctx) {
-  const { data } = await ctx.db.from("calls").select("*").eq("org_id", ctx.orgId).is("summary", null).limit(3);
+  const { data, error } = await ctx.db.from("calls").select("*").eq("org_id", ctx.orgId).is("summary", null).limit(3);
+  if (error) throw new Error(`Failed to load calls for analysis: ${error.message}`);
   const calls = (data ?? []) as any[];
   let n = 0;
   const { analyseTranscript } = await nlp();
@@ -293,7 +298,8 @@ async function voipAgent(ctx: Ctx) {
 }
 
 async function supportAgent(ctx: Ctx) {
-  const { data } = await ctx.db.from("tickets").select("*").eq("org_id", ctx.orgId).eq("status", "open").is("ai_reply", null).limit(4);
+  const { data, error } = await ctx.db.from("tickets").select("*").eq("org_id", ctx.orgId).eq("status", "open").is("ai_reply", null).limit(4);
+  if (error) throw new Error(`Failed to load support tickets: ${error.message}`);
   const tickets = (data ?? []) as any[];
   let n = 0;
   const { writeSupportReply } = await nlp();
@@ -308,13 +314,14 @@ async function supportAgent(ctx: Ctx) {
 
 async function pipelineAgent(ctx: Ctx) {
   const stale = new Date(Date.now() - 86400000).toISOString();
-  const { data } = await ctx.db
+  const { data, error } = await ctx.db
     .from("deals")
     .select("*")
     .eq("org_id", ctx.orgId)
     .not("stage", "in", "(closed_won,closed_lost)")
     .or(`health_score.is.null,updated_at.lt.${stale}`)
     .limit(BATCH);
+  if (error) throw new Error(`Failed to load pipeline deals: ${error.message}`);
   const deals = (data ?? []) as any[];
   if (!deals.length) return 0;
   const decisions = await decide(
@@ -347,7 +354,13 @@ const RUNNERS: Record<AgentName, (ctx: Ctx) => Promise<number>> = {
 
 /** Run every agent once for one organization, guarded by a lease and the paused flag. */
 export async function runAgents(db: Db, orgId: string, key: string, trigger: "manual" | "schedule") {
-  const { data: settings } = await db.from("agent_settings").select("paused,pause_reason").eq("org_id", orgId).maybeSingle();
+  const { data: settings, error: settingsError } = await db
+    .from("agent_settings")
+    .select("paused,pause_reason")
+    .eq("org_id", orgId)
+    .maybeSingle();
+  // Fail closed: if the pause state cannot be read, never start autonomous actions.
+  if (settingsError) throw new Error(`Unable to verify agent pause state: ${settingsError.message}`);
   if (settings?.paused) return { status: "paused", reason: settings.pause_reason as string | null, decisions: 0 };
 
   const { data: got, error: leaseError } = await db.rpc("acquire_agent_lease", { v_org: orgId, v_seconds: 600 });
@@ -359,7 +372,16 @@ export async function runAgents(db: Db, orgId: string, key: string, trigger: "ma
     .insert({ org_id: orgId, trigger })
     .select("id")
     .single();
-  if (runError) throw new Error(runError.message);
+  if (runError) {
+    const { error: releaseError } = await db
+      .from("agent_settings")
+      .update({ lease_until: null })
+      .eq("org_id", orgId);
+    if (releaseError) {
+      throw new Error(`Unable to create agent run: ${runError.message}; lease release also failed: ${releaseError.message}`);
+    }
+    throw new Error(runError.message);
+  }
 
   const ctx: Ctx = { db, orgId, runId: run.id, key };
   const perAgent: Record<string, number> = {};
@@ -375,7 +397,14 @@ export async function runAgents(db: Db, orgId: string, key: string, trigger: "ma
       if (error instanceof AgentPause) {
         status = "paused";
         errorText = error.message;
-        await db.from("agent_settings").update({ paused: true, pause_reason: error.message }).eq("org_id", orgId);
+        const { error: pauseError } = await db
+          .from("agent_settings")
+          .update({ paused: true, pause_reason: error.message })
+          .eq("org_id", orgId);
+        if (pauseError) {
+          status = "partial";
+          errorText = `${error.message} Pause state could not be persisted: ${pauseError.message}`.slice(0, 500);
+        }
         break;
       }
       perAgent[agent] = 0;
@@ -385,14 +414,22 @@ export async function runAgents(db: Db, orgId: string, key: string, trigger: "ma
   }
 
   const summary = AGENTS.map((a) => `${a} ${perAgent[a] ?? 0}`).join(" · ");
-  await db
+  const { error: runUpdateError } = await db
     .from("agent_runs")
     .update({ status, decisions: total, summary, error: errorText, finished_at: new Date().toISOString() })
     .eq("id", run.id);
-  await db
+  const { error: leaseReleaseError } = await db
     .from("agent_settings")
     .update({ lease_until: null, last_run_at: new Date().toISOString() })
     .eq("org_id", orgId);
+
+  if (runUpdateError || leaseReleaseError) {
+    const failures = [
+      runUpdateError ? `run status: ${runUpdateError.message}` : null,
+      leaseReleaseError ? `lease release: ${leaseReleaseError.message}` : null,
+    ].filter(Boolean);
+    throw new Error(`Agent run persistence failed (${failures.join("; ")}).`);
+  }
 
   return { status, reason: errorText, decisions: total };
 }
@@ -412,6 +449,11 @@ export async function undoDecision(db: Db, orgId: string, id: string) {
     const { error: e } = await db.from(d.target_table).update(d.before).eq("id", d.target_id).eq("org_id", orgId);
     if (e) throw new Error(e.message);
   }
-  await db.from("agent_decisions").update({ undone_at: new Date().toISOString() }).eq("id", id).eq("org_id", orgId);
+  const { error: markUndoneError } = await db
+    .from("agent_decisions")
+    .update({ undone_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("org_id", orgId);
+  if (markUndoneError) throw new Error(markUndoneError.message);
   return { ok: true };
 }

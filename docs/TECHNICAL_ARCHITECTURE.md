@@ -56,7 +56,7 @@ The repository includes a placeholder-only `.env.example` for local setup. Copy 
 
 ## Verification gaps
 
-At the time of the initial static review, `package.json` had `dev`, `build`, `build:dev`, `preview`, `lint`, and `format` scripts. A subsequent CI workflow now runs locked dependency installation, ESLint, and production build. The latest recorded CI run passed all three steps; the lint configuration still emits non-blocking warnings in legacy adapter modules and React components. A dedicated `tsc --noEmit` typecheck is now enforced as a separate CI step. There is still no test script or visible unit/e2e test framework.
+At the time of the initial static review, `package.json` had `dev`, `build`, `build:dev`, `preview`, `lint`, and `format` scripts. A subsequent CI workflow now runs locked dependency installation, ESLint, and production build. The latest recorded CI run passed all three steps; the lint configuration still emits non-blocking warnings in legacy adapter modules and React components. A dedicated `tsc --noEmit` typecheck is now enforced as a separate CI step. The repository now has a Bun test script and focused unit tests for AI error classification, Knowledge Mesh index repair, deterministic evaluator rules, and agent pause/lease safety. Integration and end-to-end coverage for auth, RLS, persistence, and core business workflows remains outstanding.
 
 ## Evaluator rules
 
