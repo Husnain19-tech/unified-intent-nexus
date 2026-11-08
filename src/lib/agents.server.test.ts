@@ -33,7 +33,13 @@ function createDb(options: {
 describe("runAgents safety guards", () => {
   it("fails closed when the pause state cannot be read", async () => {
     const { db, calls } = createDb({ settingsError: { message: "database unavailable" } });
-    await expect(runAgents(db as never, "org-1", "key", "schedule")).rejects.toThrow(
+    let thrown: unknown;
+    try {
+      await runAgents(db as never, "org-1", "key", "schedule");
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown instanceof Error ? thrown.message : "").toBe(
       "Unable to verify agent pause state: database unavailable",
     );
     expect(calls).toEqual(["from:agent_settings"]);
@@ -48,7 +54,13 @@ describe("runAgents safety guards", () => {
 
   it("surfaces lease acquisition errors before creating a run", async () => {
     const { db, calls } = createDb({ settings: { paused: false }, leaseError: { message: "lease rpc failed" } });
-    await expect(runAgents(db as never, "org-1", "key", "schedule")).rejects.toThrow("lease rpc failed");
+    let thrown: unknown;
+    try {
+      await runAgents(db as never, "org-1", "key", "schedule");
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown instanceof Error ? thrown.message : "").toBe("lease rpc failed");
     expect(calls).toEqual(["from:agent_settings", "rpc:acquire_agent_lease"]);
   });
 
