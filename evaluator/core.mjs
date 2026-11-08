@@ -11,10 +11,6 @@ const REQUIRED_CI_COMMANDS = [
   "bun run evaluate",
 ];
 
-function exists(root, relativePath) {
-  return fs.existsSync(path.join(root, relativePath));
-}
-
 function readText(root, relativePath) {
   try {
     return fs.readFileSync(path.join(root, relativePath), "utf8");
