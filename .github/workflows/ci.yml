@@ -2,7 +2,7 @@ name: OmniFlow CI
 
 on:
   push:
-    branches: [chore/omni-evaluator-baseline]
+    branches: [main, chore/omni-evaluator-baseline]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -36,6 +36,9 @@ jobs:
 
       - name: Run TypeScript typecheck
         run: bun run typecheck
+
+      - name: Run deterministic repository evaluator
+        run: bun run evaluate -- --json
 
       - name: Build for production
         if: always()
