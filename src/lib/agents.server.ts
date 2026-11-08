@@ -168,21 +168,23 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
 
 async function salesAgent(ctx: Ctx) {
   const cutoff = new Date(Date.now() - 3 * 86400000).toISOString();
-  const { data } = await ctx.db
+  const { data, error: leadsError } = await ctx.db
     .from("leads")
     .select("*")
     .eq("org_id", ctx.orgId)
     .not("stage", "in", "(won,lost)")
     .or(`last_touch_at.is.null,last_touch_at.lt.${cutoff}`)
     .limit(4);
+  if (leadsError) throw new Error(`Failed to load sales leads: ${leadsError.message}`);
   const leads = (data ?? []) as any[];
   if (!leads.length) return 0;
-  const { data: touchRows } = await ctx.db
+  const { data: touchRows, error: touchesError } = await ctx.db
     .from("lead_touches")
     .select("*")
     .eq("org_id", ctx.orgId)
     .in("lead_id", leads.map((l) => l.id))
     .order("created_at", { ascending: false });
+  if (touchesError) throw new Error(`Failed to load sales touch history: ${touchesError.message}`);
   const touchesFor = (id: string) => ((touchRows ?? []) as any[]).filter((t) => t.lead_id === id);
 
   const decisions = await decide(
@@ -222,11 +224,12 @@ async function salesAgent(ctx: Ctx) {
     n += await updateTracked(ctx, "sales", "leads", lead, patch, d.action, lead.company, `${d.rationale} Angle: ${outreach.angle}`);
 
     const body = [outreach.subject ? `Subject: ${outreach.subject}` : "", outreach.message].filter(Boolean).join("\n\n");
-    const { data: touch } = await ctx.db
+    const { data: touch, error: touchError } = await ctx.db
       .from("lead_touches")
       .insert({ org_id: ctx.orgId, lead_id: lead.id, channel, note: `AI draft (${outreach.angle}):\n${body}`.slice(0, 2000), sentiment: outreach.sentiment })
       .select("id")
       .single();
+    if (touchError) throw new Error(`Failed to save AI outreach draft: ${touchError.message}`);
     if (touch) {
       await record(ctx, {
         agent: "sales",
@@ -251,7 +254,8 @@ async function salesAgent(ctx: Ctx) {
 }
 
 async function voipAgent(ctx: Ctx) {
-  const { data } = await ctx.db.from("calls").select("*").eq("org_id", ctx.orgId).is("summary", null).limit(3);
+  const { data, error } = await ctx.db.from("calls").select("*").eq("org_id", ctx.orgId).is("summary", null).limit(3);
+  if (error) throw new Error(`Failed to load calls for analysis: ${error.message}`);
   const calls = (data ?? []) as any[];
   let n = 0;
   const { analyseTranscript } = await nlp();
@@ -294,7 +298,8 @@ async function voipAgent(ctx: Ctx) {
 }
 
 async function supportAgent(ctx: Ctx) {
-  const { data } = await ctx.db.from("tickets").select("*").eq("org_id", ctx.orgId).eq("status", "open").is("ai_reply", null).limit(4);
+  const { data, error } = await ctx.db.from("tickets").select("*").eq("org_id", ctx.orgId).eq("status", "open").is("ai_reply", null).limit(4);
+  if (error) throw new Error(`Failed to load support tickets: ${error.message}`);
   const tickets = (data ?? []) as any[];
   let n = 0;
   const { writeSupportReply } = await nlp();
@@ -309,13 +314,14 @@ async function supportAgent(ctx: Ctx) {
 
 async function pipelineAgent(ctx: Ctx) {
   const stale = new Date(Date.now() - 86400000).toISOString();
-  const { data } = await ctx.db
+  const { data, error } = await ctx.db
     .from("deals")
     .select("*")
     .eq("org_id", ctx.orgId)
     .not("stage", "in", "(closed_won,closed_lost)")
     .or(`health_score.is.null,updated_at.lt.${stale}`)
     .limit(BATCH);
+  if (error) throw new Error(`Failed to load pipeline deals: ${error.message}`);
   const deals = (data ?? []) as any[];
   if (!deals.length) return 0;
   const decisions = await decide(
@@ -366,7 +372,16 @@ export async function runAgents(db: Db, orgId: string, key: string, trigger: "ma
     .insert({ org_id: orgId, trigger })
     .select("id")
     .single();
-  if (runError) throw new Error(runError.message);
+  if (runError) {
+    const { error: releaseError } = await db
+      .from("agent_settings")
+      .update({ lease_until: null })
+      .eq("org_id", orgId);
+    if (releaseError) {
+      throw new Error(`Unable to create agent run: ${runError.message}; lease release also failed: ${releaseError.message}`);
+    }
+    throw new Error(runError.message);
+  }
 
   const ctx: Ctx = { db, orgId, runId: run.id, key };
   const perAgent: Record<string, number> = {};
