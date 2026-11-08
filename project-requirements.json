@@ -299,12 +299,16 @@
       "name": "Automated test suite",
       "category": "engineering-quality",
       "priority": "critical",
-      "status": "planned",
+      "status": "partial",
       "evidence": [
-        "package.json"
+        "package.json",
+        "src/lib/ai-errors.server.test.ts",
+        "src/lib/knowledge.server.test.ts",
+        "src/lib/agents.server.test.ts",
+        "evaluator/core.test.mjs"
       ],
       "acceptance": [
-        "Unit tests cover critical pure logic",
+        "Unit tests cover critical pure logic and agent safety guards",
         "Integration tests cover auth, RLS, persistence, and AI gateway failures",
         "E2E tests cover key FYP workflows"
       ],
