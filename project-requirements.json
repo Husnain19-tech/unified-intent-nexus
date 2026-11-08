@@ -323,7 +323,8 @@
       "evidence": [
         ".gitignore",
         "src/integrations/supabase/client.server.ts",
-        "src/lib/ai-gateway.server.ts"
+        "src/lib/ai-gateway.server.ts",
+        ".env.example"
       ],
       "acceptance": [
         "Ignore local environment files",
