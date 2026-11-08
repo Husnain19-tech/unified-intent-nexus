@@ -77,7 +77,7 @@ async function record(
     rationale: string;
   },
 ) {
-  await ctx.db.from("agent_decisions").insert({
+  const { error } = await ctx.db.from("agent_decisions").insert({
     org_id: ctx.orgId,
     run_id: ctx.runId,
     agent: d.agent,
@@ -90,6 +90,7 @@ async function record(
     created_record: d.created ?? false,
     rationale: d.rationale.slice(0, 500),
   });
+  if (error) throw new Error(`Failed to persist agent decision audit record: ${error.message}`);
 }
 
 async function updateTracked(
@@ -347,7 +348,13 @@ const RUNNERS: Record<AgentName, (ctx: Ctx) => Promise<number>> = {
 
 /** Run every agent once for one organization, guarded by a lease and the paused flag. */
 export async function runAgents(db: Db, orgId: string, key: string, trigger: "manual" | "schedule") {
-  const { data: settings } = await db.from("agent_settings").select("paused,pause_reason").eq("org_id", orgId).maybeSingle();
+  const { data: settings, error: settingsError } = await db
+    .from("agent_settings")
+    .select("paused,pause_reason")
+    .eq("org_id", orgId)
+    .maybeSingle();
+  // Fail closed: if the pause state cannot be read, never start autonomous actions.
+  if (settingsError) throw new Error(`Unable to verify agent pause state: ${settingsError.message}`);
   if (settings?.paused) return { status: "paused", reason: settings.pause_reason as string | null, decisions: 0 };
 
   const { data: got, error: leaseError } = await db.rpc("acquire_agent_lease", { v_org: orgId, v_seconds: 600 });
@@ -375,7 +382,14 @@ export async function runAgents(db: Db, orgId: string, key: string, trigger: "ma
       if (error instanceof AgentPause) {
         status = "paused";
         errorText = error.message;
-        await db.from("agent_settings").update({ paused: true, pause_reason: error.message }).eq("org_id", orgId);
+        const { error: pauseError } = await db
+          .from("agent_settings")
+          .update({ paused: true, pause_reason: error.message })
+          .eq("org_id", orgId);
+        if (pauseError) {
+          status = "partial";
+          errorText = `${error.message} Pause state could not be persisted: ${pauseError.message}`.slice(0, 500);
+        }
         break;
       }
       perAgent[agent] = 0;
@@ -385,14 +399,22 @@ export async function runAgents(db: Db, orgId: string, key: string, trigger: "ma
   }
 
   const summary = AGENTS.map((a) => `${a} ${perAgent[a] ?? 0}`).join(" · ");
-  await db
+  const { error: runUpdateError } = await db
     .from("agent_runs")
     .update({ status, decisions: total, summary, error: errorText, finished_at: new Date().toISOString() })
     .eq("id", run.id);
-  await db
+  const { error: leaseReleaseError } = await db
     .from("agent_settings")
     .update({ lease_until: null, last_run_at: new Date().toISOString() })
     .eq("org_id", orgId);
+
+  if (runUpdateError || leaseReleaseError) {
+    const failures = [
+      runUpdateError ? `run status: ${runUpdateError.message}` : null,
+      leaseReleaseError ? `lease release: ${leaseReleaseError.message}` : null,
+    ].filter(Boolean);
+    throw new Error(`Agent run persistence failed (${failures.join("; ")}).`);
+  }
 
   return { status, reason: errorText, decisions: total };
 }
@@ -412,6 +434,11 @@ export async function undoDecision(db: Db, orgId: string, id: string) {
     const { error: e } = await db.from(d.target_table).update(d.before).eq("id", d.target_id).eq("org_id", orgId);
     if (e) throw new Error(e.message);
   }
-  await db.from("agent_decisions").update({ undone_at: new Date().toISOString() }).eq("id", id).eq("org_id", orgId);
+  const { error: markUndoneError } = await db
+    .from("agent_decisions")
+    .update({ undone_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("org_id", orgId);
+  if (markUndoneError) throw new Error(markUndoneError.message);
   return { ok: true };
 }
