@@ -48,6 +48,12 @@ The code references these names. Confirm deployment configuration separately; th
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
+
+
+### Environment template
+
+The repository includes a placeholder-only `.env.example` for local setup. Copy it to a local `.env` file and supply credentials through your own secret manager or local environment. Never commit a populated `.env` file. `LOVABLE_DB_MIGRATION_URL` is only needed for a separately authorized migration workflow; it is not required for normal application startup.
+
 ## Verification gaps
 
 At the time of the initial static review, `package.json` had `dev`, `build`, `build:dev`, `preview`, `lint`, and `format` scripts. A subsequent CI workflow now runs locked dependency installation, ESLint, and production build. The latest recorded CI run passed all three steps; the lint configuration still emits non-blocking warnings in legacy adapter modules and React components. A dedicated `tsc --noEmit` typecheck is now enforced as a separate CI step. There is still no test script or visible unit/e2e test framework.
