@@ -117,26 +117,17 @@ export const updateTask = createServerFn({ method: "POST" })
     if (data.assigneeId !== undefined) patch["assignee_id"] = data.assigneeId;
     if (data.dueAt !== undefined) patch["due_at"] = data.dueAt || null;
     if (data.title) patch["title"] = data.title;
-    const { error } = await db.from("tasks").update(patch).eq("id", data.id).eq("org_id", orgId);
-    if (error) throw new Error(error.message);
-    // Keep the linked promise in step with its task.
     if (data.status === "done") {
-      const { data: t, error: taskError } = await db
-        .from("tasks")
-        .select("commitment_id")
-        .eq("id", data.id)
-        .eq("org_id", orgId)
-        .maybeSingle();
-      if (taskError) throw new Error(taskError.message);
-
-      if (t?.commitment_id) {
-        const { error: commitmentError } = await db
-          .from("commitments")
-          .update({ status: "delivered" })
-          .eq("id", t.commitment_id)
-          .eq("org_id", orgId);
-        if (commitmentError) throw new Error(commitmentError.message);
-      }
+      const { status: _status, ...completionPatch } = patch;
+      const { error } = await db.rpc("complete_task_with_commitment", {
+        v_task: data.id,
+        v_org: orgId,
+        v_patch: completionPatch,
+      });
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await db.from("tasks").update(patch).eq("id", data.id).eq("org_id", orgId);
+      if (error) throw new Error(error.message);
     }
     return { ok: true };
   });
