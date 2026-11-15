@@ -1,4 +1,5 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
 /** Claude provider (Anthropic Messages API) used for every chat/reasoning call. */
 export function createLovableClaudeProvider(apiKey: string) {
@@ -10,6 +11,63 @@ export function createLovableClaudeProvider(apiKey: string) {
 }
 
 export const OMNIFLOW_CLAUDE_MODEL = "anthropic/claude-sonnet-5";
+
+/**
+ * Resolve the server-side chat provider.
+ * Claude remains the default. Azure is opt-in per environment and never
+ * becomes active merely because Azure credentials happen to be present.
+ */
+export type OmniFlowAiProviderConfig =
+  | { provider: "lovable" }
+  | { provider: "azure-foundry"; endpoint: string; apiKey: string; model: string };
+
+export function resolveOmniFlowAiProviderConfig(
+  env: Record<string, string | undefined>,
+): OmniFlowAiProviderConfig {
+  const selected = env.OMNIFLOW_AI_PROVIDER?.trim().toLowerCase() || "lovable";
+  if (selected === "lovable") return { provider: "lovable" };
+  if (selected !== "azure-foundry") {
+    throw new Error("OMNIFLOW_AI_PROVIDER must be 'lovable' or 'azure-foundry'.");
+  }
+
+  const endpoint = env.AZURE_FOUNDRY_ENDPOINT?.trim().replace(/\/+$/, "");
+  const apiKey = env.AZURE_FOUNDRY_API_KEY?.trim();
+  const model = env.AZURE_FOUNDRY_MODEL?.trim();
+  if (!endpoint || !apiKey || !model) {
+    throw new Error(
+      "Azure Foundry requires AZURE_FOUNDRY_ENDPOINT, AZURE_FOUNDRY_API_KEY, and AZURE_FOUNDRY_MODEL.",
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error("AZURE_FOUNDRY_ENDPOINT must be a valid HTTPS URL.");
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    !parsed.pathname.replace(/\/+$/, "").endsWith("/openai/v1")
+  ) {
+    throw new Error("AZURE_FOUNDRY_ENDPOINT must be an HTTPS OpenAI-compatible /openai/v1 endpoint.");
+  }
+
+  return { provider: "azure-foundry", endpoint, apiKey, model };
+}
+
+/** Return the selected chat model; credentials are read only on the server. */
+export function createOmniFlowChatModel(lovableApiKey: string) {
+  const config = resolveOmniFlowAiProviderConfig(process.env);
+  if (config.provider === "azure-foundry") {
+    const provider = createOpenAICompatible({
+      name: "azure-foundry",
+      baseURL: config.endpoint,
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+    return provider.chatModel(config.model);
+  }
+  return createLovableClaudeProvider(lovableApiKey)(OMNIFLOW_CLAUDE_MODEL);
+}
 
 /** Claude has no embedding model, so memory search vectors stay on the gateway's embedding model. */
 export const OMNIFLOW_EMBEDDING_MODEL = "google/gemini-embedding-2";
