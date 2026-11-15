@@ -1,13 +1,22 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { resolveOmniFlowAiProviderConfig } from "./ai-gateway.server";
 
+function thrownMessage(fn: () => unknown): string {
+  try {
+    fn();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  return "";
+}
+
 describe("resolveOmniFlowAiProviderConfig", () => {
-  test("defaults to the existing Lovable provider", () => {
+  it("defaults to the existing Lovable provider", () => {
     expect(resolveOmniFlowAiProviderConfig({})).toEqual({ provider: "lovable" });
     expect(resolveOmniFlowAiProviderConfig({ AZURE_FOUNDRY_API_KEY: "unused" })).toEqual({ provider: "lovable" });
   });
 
-  test("accepts a complete HTTPS Foundry OpenAI-compatible configuration", () => {
+  it("accepts a complete HTTPS Foundry OpenAI-compatible configuration", () => {
     expect(
       resolveOmniFlowAiProviderConfig({
         OMNIFLOW_AI_PROVIDER: "azure-foundry",
@@ -23,27 +32,33 @@ describe("resolveOmniFlowAiProviderConfig", () => {
     });
   });
 
-  test("fails closed when Azure is selected but configuration is incomplete", () => {
-    expect(() =>
-      resolveOmniFlowAiProviderConfig({ OMNIFLOW_AI_PROVIDER: "azure-foundry" }),
-    ).toThrow("Azure Foundry requires");
+  it("fails closed when Azure is selected but configuration is incomplete", () => {
+    expect(thrownMessage(() => resolveOmniFlowAiProviderConfig({ OMNIFLOW_AI_PROVIDER: "azure-foundry" }))).toBe(
+      "Azure Foundry requires AZURE_FOUNDRY_ENDPOINT, AZURE_FOUNDRY_API_KEY, and AZURE_FOUNDRY_MODEL.",
+    );
   });
 
-  test("rejects non-HTTPS and non-OpenAI-compatible endpoints", () => {
+  it("rejects non-HTTPS and non-OpenAI-compatible endpoints", () => {
     const base = {
       OMNIFLOW_AI_PROVIDER: "azure-foundry",
       AZURE_FOUNDRY_API_KEY: "test-only",
       AZURE_FOUNDRY_MODEL: "test-deployment",
     };
-    expect(() =>
-      resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "http://sample.services.ai.azure.com/openai/v1" }),
-    ).toThrow("HTTPS");
-    expect(() =>
-      resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "https://sample.services.ai.azure.com/models" }),
-    ).toThrow("/openai/v1");
+    expect(
+      thrownMessage(() =>
+        resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "http://sample.services.ai.azure.com/openai/v1" }),
+      ),
+    ).toContain("HTTPS");
+    expect(
+      thrownMessage(() =>
+        resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "https://sample.services.ai.azure.com/models" }),
+      ),
+    ).toContain("/openai/v1");
   });
 
-  test("rejects unknown provider names", () => {
-    expect(() => resolveOmniFlowAiProviderConfig({ OMNIFLOW_AI_PROVIDER: "unknown" })).toThrow("must be");
+  it("rejects unknown provider names", () => {
+    expect(thrownMessage(() => resolveOmniFlowAiProviderConfig({ OMNIFLOW_AI_PROVIDER: "unknown" }))).toContain(
+      "must be",
+    );
   });
 });
