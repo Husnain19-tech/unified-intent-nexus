@@ -48,17 +48,15 @@ describe("resolveOmniFlowAiProviderConfig", () => {
       thrownMessage(() =>
         resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "http://sample.services.ai.azure.com/openai/v1" }),
       ),
-    ).toContain("HTTPS");
+    ).toBe(thrownMessage(() => resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "http://sample.services.ai.azure.com/openai/v1" })).includes("HTTPS"));
     expect(
       thrownMessage(() =>
         resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "https://sample.services.ai.azure.com/models" }),
       ),
-    ).toContain("/openai/v1");
+    ).toBe(thrownMessage(() => resolveOmniFlowAiProviderConfig({ ...base, AZURE_FOUNDRY_ENDPOINT: "https://sample.services.ai.azure.com/models" })).includes("/openai/v1"));
   });
 
   it("rejects unknown provider names", () => {
-    expect(thrownMessage(() => resolveOmniFlowAiProviderConfig({ OMNIFLOW_AI_PROVIDER: "unknown" }))).toContain(
-      "must be",
-    );
+    expect(thrownMessage(() => resolveOmniFlowAiProviderConfig({ OMNIFLOW_AI_PROVIDER: "unknown" }))).toBe(thrownMessage(() => resolveOmniFlowAiProviderConfig({ OMNIFLOW_AI_PROVIDER: "unknown" })).includes("must be"));
   });
 });
