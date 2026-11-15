@@ -34,13 +34,13 @@ type Decision = z.infer<typeof DecisionSchema>["decisions"][number];
 export class AgentPause extends Error {}
 
 async function decide(key: string, instructions: string, items: unknown[]): Promise<Decision[]> {
-  const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
+  const { createOmniFlowChatModel } = await import("./ai-gateway.server");
   const { streamText, Output, NoObjectGeneratedError } = await import("ai");
-  const provider = createLovableClaudeProvider(key);
+  const model = createOmniFlowChatModel(key);
   const prompt = `Today is ${new Date().toDateString()}.\n${instructions}\n\nEvery decision must include every field. Use an empty string, 0 or an empty list for fields that do not apply. rationale is one short sentence a manager can read.\n\nITEMS:\n${JSON.stringify(items, null, 1)}`;
   try {
     const result = streamText({
-      model: provider(OMNIFLOW_CLAUDE_MODEL),
+      model,
       output: Output.object({ schema: DecisionSchema }),
       prompt,
       maxOutputTokens: 16000,
