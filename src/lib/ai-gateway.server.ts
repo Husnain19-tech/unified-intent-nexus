@@ -24,15 +24,15 @@ export type OmniFlowAiProviderConfig =
 export function resolveOmniFlowAiProviderConfig(
   env: Record<string, string | undefined>,
 ): OmniFlowAiProviderConfig {
-  const selected = env.OMNIFLOW_AI_PROVIDER?.trim().toLowerCase() || "lovable";
+  const selected = env["OMNIFLOW_AI_PROVIDER"]?.trim().toLowerCase() || "lovable";
   if (selected === "lovable") return { provider: "lovable" };
   if (selected !== "azure-foundry") {
     throw new Error("OMNIFLOW_AI_PROVIDER must be 'lovable' or 'azure-foundry'.");
   }
 
-  const endpoint = env.AZURE_FOUNDRY_ENDPOINT?.trim().replace(/\/+$/, "");
-  const apiKey = env.AZURE_FOUNDRY_API_KEY?.trim();
-  const model = env.AZURE_FOUNDRY_MODEL?.trim();
+  const endpoint = env["AZURE_FOUNDRY_ENDPOINT"]?.trim().replace(/\/+$/, "");
+  const apiKey = env["AZURE_FOUNDRY_API_KEY"]?.trim();
+  const model = env["AZURE_FOUNDRY_MODEL"]?.trim();
   if (!endpoint || !apiKey || !model) {
     throw new Error(
       "Azure Foundry requires AZURE_FOUNDRY_ENDPOINT, AZURE_FOUNDRY_API_KEY, and AZURE_FOUNDRY_MODEL.",
