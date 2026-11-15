@@ -11,12 +11,12 @@ export class AiBlocked extends Error {
 
 /** One structured, reasoning-backed call on the Lovable AI Gateway. */
 async function structured<T extends z.ZodTypeAny>(key: string, system: string, prompt: string, schema: T): Promise<z.infer<T>> {
-  const { createLovableClaudeProvider, OMNIFLOW_CLAUDE_MODEL } = await import("./ai-gateway.server");
+  const { createOmniFlowChatModel } = await import("./ai-gateway.server");
   const { streamText, Output, NoObjectGeneratedError } = await import("ai");
-  const provider = createLovableClaudeProvider(key);
+  const model = createOmniFlowChatModel(key);
   try {
     const result = streamText({
-      model: provider(OMNIFLOW_CLAUDE_MODEL),
+      model,
       system,
       prompt,
       output: Output.object({ schema }),
